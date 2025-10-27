@@ -1,3 +1,8 @@
-name = "mod-http-exe-flight"
+name = "mod-http-data-flight"
 module_type = "Wasm"
-alternatives = ["yak-edinet.toml", "yak-votes.toml", "yak-wooldridge.toml", "yak-edinet-ext.toml", "yak-votes-ext.toml", "yak-wooldridge-ext.toml"]
+files = []
+
+[external_com]
+endpoint = "https://localhost:50053"
+use_tls = true
+ca_cert = "../../isekai-data-server/certs/ca.crt"

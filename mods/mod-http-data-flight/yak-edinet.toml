@@ -1,8 +1,0 @@
-name = "mod-http-exe-flight-edinet"
-module_type = "Wasm"
-files = []
-
-[external_com]
-endpoint = "https://localhost:50053"
-use_tls = true
-ca_cert = "../../ext-grpc-server/certs/ca.crt"

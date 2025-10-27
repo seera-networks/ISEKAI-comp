@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-wstd = { workspace = true }
-wstd-macro = { workspace = true }
-wasi = "0.14.0"
-wit-bindgen = { workspace = true}
+anyhow = { workspace = true }
 arrow = { workspace = true }
 arrow-flight = { workspace = true }
-anyhow = { workspace = true }
 futures = { workspace = true, features = ["alloc"] }
 isekai-utils = { workspace = true }
 isekai-utils-mod-http = { workspace = true }
+wasi = { workspace = true }
+wit-bindgen = { workspace = true}
+wstd = { workspace = true }
+wstd-macro = { workspace = true }

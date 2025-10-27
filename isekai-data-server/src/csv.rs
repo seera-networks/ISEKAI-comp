@@ -4,10 +4,9 @@
 use arrow::array::{Float32Array, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use tonic::{Result, Status};
 use isekai_utils::policy::PolicyFile;
 
@@ -35,7 +34,7 @@ impl DataStore {
     }
 }
 
-static STATE: Lazy<Mutex<State>> = Lazy::new(|| {
+static STATE: LazyLock<Mutex<State>> = LazyLock::new(|| {
     Mutex::new(State {
         data: DataStore::new(),
     })

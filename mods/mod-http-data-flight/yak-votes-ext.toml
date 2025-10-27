@@ -1,7 +1,0 @@
-name = "mod-http-exe-flight-votes-ext"
-module_type = "Wasm"
-files = []
-
-[external_com]
-endpoint = "https://yakdata.seera-networks.com:50055"
-use_tls = true
