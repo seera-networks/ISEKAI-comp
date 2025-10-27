@@ -1,0 +1,54 @@
+interface types {
+    use wasi:io/poll@0.2.0.{pollable};
+
+    variant error-code {
+        would-block,
+        not-in-progress,
+        invalid-state,
+        already-connected,
+        connection-refused(string),
+        in-progress,
+        invalid-parameter,
+        internal-error(option<string>)
+    }
+
+    record flight-descriptor {
+        descriptor-type: s32,
+        cmd: list<u8>,
+        path: list<string>
+    }
+
+    record flight-data {
+        flight-descriptor: option<flight-descriptor>,
+        data-header: list<u8>,
+        app-metadata: list<u8>,
+        data-body: list<u8>
+    }
+
+    record put-result {
+        app-metadata: list<u8>,
+    }
+
+    resource client {
+        start-connect: func() -> result<_, error-code>;
+        finish-connect: func() -> result<_, error-code>;
+        start-handshake: func() -> result<_, error-code>;
+        finish-handshake: func() -> result<_, error-code>;
+        start-do-get: func(ticket: list<u8>) -> result<_, error-code>;
+        finish-do-get: func() -> result<incoming-response, error-code>;
+        start-do-put: func() -> result<_, error-code>;
+        do-put: func(data: option<flight-data>, fin: bool) -> result<_, error-code>;
+        finish-do-put: func() -> result<incoming-put-response, error-code>;
+        subscribe: func() -> pollable;
+    }
+
+    resource incoming-response {
+        subscribe: func() -> pollable;
+        get: func() -> result<option<flight-data>, error-code>;
+    }
+
+    resource incoming-put-response {
+        subscribe: func() -> pollable;
+        get: func() -> result<option<put-result>, error-code>;
+    }
+}

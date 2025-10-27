@@ -1,0 +1,7 @@
+name = "mod-http-exe-flight-wooldridge-ext"
+module_type = "Wasm"
+files = []
+
+[external_com]
+endpoint = "https://yakdata.seera-networks.com:50054"
+use_tls = true

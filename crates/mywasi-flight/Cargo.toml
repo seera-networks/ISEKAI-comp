@@ -1,0 +1,19 @@
+[package]
+name = "wasmtime-mywasi-flight"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-stream = { workspace = true }
+futures = { workspace = true, features = ["alloc"] }
+tokio = { workspace = true, features = ["full"] }
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
+anyhow = { workspace = true }
+tonic = { workspace = true, features = ["tls-webpki-roots"] }
+arrow-flight = { workspace = true }
+bytes = { workspace = true }
+tokio-stream = { workspace = true }
+snpguest = { workspace = true }
+arrow = {workspace = true}
+bincode = {workspace = true}

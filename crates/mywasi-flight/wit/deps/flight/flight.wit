@@ -1,0 +1,9 @@
+package mywasi:flight;
+
+world imports {
+    import client;
+}
+
+world api {
+    include imports;
+}

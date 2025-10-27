@@ -1,0 +1,3 @@
+name = "mod-http-exe-flight"
+module_type = "Wasm"
+alternatives = ["yak-edinet.toml", "yak-votes.toml", "yak-wooldridge.toml", "yak-edinet-ext.toml", "yak-votes-ext.toml", "yak-wooldridge-ext.toml"]

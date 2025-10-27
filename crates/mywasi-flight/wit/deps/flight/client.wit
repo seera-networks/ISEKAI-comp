@@ -1,0 +1,5 @@
+interface client {
+    use types.{client, error-code};
+
+    create-client: func() -> result<client, error-code>;
+}
