@@ -364,6 +364,13 @@ impl FlightService for FlightServiceImpl {
             "test".to_string()
         };
 
+        if auth::authenticate_subject(&self.cmd_opts, &subject) {
+            return Err(Status::unauthenticated(format!(
+                "Unauthorized subject: {}",
+                subject
+            )));
+        }
+
         let mut target = None;
         let mut policy = None;
         let mut stream = FlightDataDecoder::new(request.into_inner().map_err(FlightError::from));
