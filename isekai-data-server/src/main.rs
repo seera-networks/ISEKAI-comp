@@ -21,12 +21,12 @@ use arrow_flight::{
     HandshakeResponse, PollInfo, PutResult, SchemaResult, Ticket,
 };
 
+use isekai_utils::module::GetTicket;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use isekai_utils::module::GetTicket;
 
 const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 const DEFAULT_EXPOSED_HEADERS: [&str; 3] =
@@ -45,6 +45,7 @@ pub struct Claims {
     azp: String,
 }
 
+mod auth;
 mod csv;
 mod edinet;
 mod storage;
@@ -227,6 +228,13 @@ impl FlightService for FlightServiceImpl {
         } else {
             "test".to_string()
         };
+
+        if auth::authenticate_subject(&self.cmd_opts, &subject) {
+            return Err(Status::unauthenticated(format!(
+                "Unauthorized subject: {}",
+                subject
+            )));
+        }
 
         let ticket = GetTicket::from_json(
             &String::from_utf8_lossy(&request.into_inner().ticket).to_string(),
@@ -439,6 +447,9 @@ pub struct CmdOptions {
     /// enable mTLS
     #[argh(switch)]
     no_tls: bool,
+    /// authorized subject
+    #[argh(option)]
+    authorized_subject: Option<String>,
     /// CSV file path
     #[argh(option)]
     csv_file: Option<String>,
