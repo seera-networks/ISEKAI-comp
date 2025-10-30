@@ -229,7 +229,7 @@ impl FlightService for FlightServiceImpl {
             "test".to_string()
         };
 
-        if auth::authenticate_subject(&self.cmd_opts, &subject) {
+        if !auth::authenticate_subject(&self.cmd_opts, &subject) {
             return Err(Status::unauthenticated(format!(
                 "Unauthorized subject: {}",
                 subject
@@ -364,7 +364,7 @@ impl FlightService for FlightServiceImpl {
             "test".to_string()
         };
 
-        if auth::authenticate_subject(&self.cmd_opts, &subject) {
+        if !auth::authenticate_subject(&self.cmd_opts, &subject) {
             return Err(Status::unauthenticated(format!(
                 "Unauthorized subject: {}",
                 subject
