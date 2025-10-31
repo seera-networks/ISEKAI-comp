@@ -73,6 +73,19 @@ gen_certs.shで指定しているドメイン名をlocalhostからisekai-data.ex
     ```
     ../target/x86_64-unknown-linux-gnu/release/isekai-data-server --csv-file wooldridge/raw_data/data_csv/wage1.csv --policy-db ./policy.db --key ./certs/server.key --cert ./certs/server.crt
     ```
+## 利用できるユーザの制限
+- ISEKAI計算では、[YakAuth](https://seera-networks.github.io/YakAuth/)で発行したトークン（JWT）を使用してユーザの認証を行います。ISEKAIデータサーバーでは、特定のユーザーがISEKAI計算を利用する場合のみデータを提供するように設定できます。
+1. YakAuthで利用したいユーザのトークンを取得する。
+
+2. [JWT Debugger](https://www.jwt.io/)を用いてトークンのsubを調べる。subは例えば次のように設定されています:
+    ```
+    "sub": "auth0|683eda78562794c7c574c4dc",
+    ```
+
+3. subの内容のうち、|を_に置き換えてisekai-data-serverの引数に設定する。例えば、次のようになります:
+    ```
+    ../target/x86_64-unknown-linux-gnu/release/isekai-data-server --csv-file wooldridge/raw_data/data_csv/wage1.csv --authorized-subject auth0_683eda78562794c7c574c4dc --policy-db ./policy.db --key /etc/letsencrypt/live/isekai-data.example.com/privkey.pem --cert /etc/letsencrypt/live/isekai-data.example.com/fullchain.pem
+    ```
 
 # certbot を使ったLet's Encryptの証明書設定手順
 
