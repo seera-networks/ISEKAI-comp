@@ -4,6 +4,7 @@
 //! Implements the base structure (i.e. [FlightCtx]) that will provide the
 //! implementation of the flight API.
 
+use anyhow::Result;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::{FlightData, PutResult};
 use futures::StreamExt;
@@ -18,8 +19,8 @@ use wasmtime_wasi::p2::Pollable;
 
 pub enum FlightClientState {
     Default,
-    Connecting(oneshot::Receiver<Result<Channel, tonic::transport::Error>>),
-    ConnectReady(Result<Result<Channel, tonic::transport::Error>, RecvError>),
+    Connecting(oneshot::Receiver<anyhow::Result<Channel>>),
+    ConnectReady(Result<anyhow::Result<Channel>, RecvError>),
     Connected(FlightServiceClient<Channel>),
     HandshakeProgress(oneshot::Receiver<(FlightServiceClient<Channel>, tonic::Result<String>)>),
     HandshakeReady(Result<(FlightServiceClient<Channel>, tonic::Result<String>), RecvError>),

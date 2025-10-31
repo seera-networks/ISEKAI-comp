@@ -57,6 +57,8 @@ where
     fn start_connect(&mut self, id: Resource<HostFlightClient>) -> FlightResult<()> {
         let server_url = self.ctx().server_url.clone();
         let use_tls = self.ctx().use_tls;
+        let client_cert_pem = self.ctx().client_cert_pem.clone();
+        let client_key_pem = self.ctx().client_key_pem.clone();
         let ca_cert_pem = self.ctx().ca_cert_pem.clone();
         let client = self.table().get_mut(&id)?;
         match &client.state {
@@ -65,7 +67,7 @@ where
                 return Err(ErrorCode::AlreadyConnected.into());
             }
         }
-        let (tx, rx) = oneshot::channel();
+        let (tx, rx) = oneshot::channel::<anyhow::Result<Channel>>();
 
         with_ambient_tokio_runtime(|| {
             tokio::spawn(async move {
@@ -76,10 +78,24 @@ where
                     } else {
                         ClientTlsConfig::new().with_webpki_roots()
                     };
+                    let tls_config = match (client_cert_pem, client_key_pem) {
+                        (Some(cert_pem), Some(key_pem)) => {
+                            let identity =
+                                tonic::transport::Identity::from_pem(cert_pem, key_pem);
+                            tls_config.identity(identity)
+                        }
+                        (Some(_), None) | (None, Some(_)) => {
+                            let _ = tx.send(Err(tonic::Status::internal(
+                                "both client cert and key must be provided".to_string(),
+                            ).into()));
+                            return;
+                        }
+                        _ => tls_config,
+                    };
                     match endpoint.tls_config(tls_config) {
                         Ok(endpoint) => endpoint,
                         Err(e) => {
-                            let _ = tx.send(Err(e));
+                            let _ = tx.send(Err(e.into()));
                             return;
                         }
                     }
@@ -87,7 +103,7 @@ where
                     endpoint
                 };
                 let res = endpoint.connect().await;
-                let _ = tx.send(res);
+                let _ = tx.send(res.map_err(|e| e.into()));
             })
         });
         client.state = FlightClientState::Connecting(rx);

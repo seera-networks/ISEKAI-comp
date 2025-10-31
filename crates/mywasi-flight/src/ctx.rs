@@ -12,6 +12,8 @@ use snpguest::report::AttestationConfig;
 pub struct FlightCtxBuilder {
     server_url: String,
     use_tls: bool,
+    client_cert_pem: Option<Vec<u8>>,
+    client_key_pem: Option<Vec<u8>>,
     ca_cert_pem: Option<Vec<u8>>,
     jwt: Option<String>,
     attestation_config: AttestationConfig,
@@ -23,6 +25,8 @@ impl FlightCtxBuilder {
         Self {
             server_url: "http://localhost:50053".to_string(),
             use_tls: false,
+            client_cert_pem: None,
+            client_key_pem: None,
             ca_cert_pem: None,
             jwt: None,
             attestation_config: AttestationConfig {
@@ -41,6 +45,18 @@ impl FlightCtxBuilder {
     /// Sets whether to use TLS.
     pub fn use_tls(mut self, on: bool) -> Self {
         self.use_tls = on;
+        self
+    }
+
+    /// Sets TLS Client certificate.
+    pub fn client_cert_pem(mut self, client_cert_pem: &Vec<u8>) -> Self {
+        self.client_cert_pem = Some(client_cert_pem.clone());
+        self
+    }
+
+    /// Sets TLS Client key.
+    pub fn client_key_pem(mut self, client_key_pem: &Vec<u8>) -> Self {
+        self.client_key_pem = Some(client_key_pem.clone());
         self
     }
 
@@ -67,6 +83,8 @@ impl FlightCtxBuilder {
         FlightCtx {
             server_url: self.server_url,
             use_tls: self.use_tls,
+            client_key_pem: self.client_key_pem,
+            client_cert_pem: self.client_cert_pem,
             ca_cert_pem: self.ca_cert_pem,
             jwt: self.jwt,
             attestation_config: self.attestation_config,
@@ -78,6 +96,8 @@ impl FlightCtxBuilder {
 pub struct FlightCtx {
     pub(crate) server_url: String,
     pub(crate) use_tls: bool,
+    pub(crate) client_cert_pem: Option<Vec<u8>>,
+    pub(crate) client_key_pem: Option<Vec<u8>>,
     pub(crate) ca_cert_pem: Option<Vec<u8>>,
     pub(crate) jwt: Option<String>,
     pub(crate) attestation_config: AttestationConfig,

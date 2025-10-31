@@ -72,6 +72,11 @@ impl FlightService for FlightServiceImpl {
         request: Request<Streaming<HandshakeRequest>>,
     ) -> Result<Response<Self::HandshakeStream>, Status> {
         let cmd_opts = self.cmd_opts.clone();
+        if request.peer_certs().is_some() {
+            println!("Client certificate presented");
+        } else {
+            println!("No client certificate presented");
+        }
         let mut inbound = request.into_inner();
 
         let mut cnt = 0;
@@ -511,8 +516,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let cert = std::fs::read(&cmd_opts.cert)?;
         let key = std::fs::read(&cmd_opts.key)?;
         let server_identity = tonic::transport::Identity::from_pem(cert, key);
+        let client_ca_cert =
+            tonic::transport::Certificate::from_pem(include_bytes!("../../certs/yakCA.crt"));
 
-        let tls_config = tonic::transport::ServerTlsConfig::new().identity(server_identity);
+        let tls_config = tonic::transport::ServerTlsConfig::new()
+            .identity(server_identity)
+            .client_ca_root(client_ca_cert);
 
         Server::builder().tls_config(tls_config)?
     };
