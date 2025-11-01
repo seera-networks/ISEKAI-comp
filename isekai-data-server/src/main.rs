@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2025 SEERA Networks Corporation <info@seera-networks.com>
 // SPDX-License-Identifier: MIT
 
+use base64::Engine;
+use anyhow::anyhow;
 use futures::stream::BoxStream;
 use futures::{StreamExt, TryStreamExt};
 use http::header::HeaderName;
@@ -55,6 +57,7 @@ pub struct FlightServiceImpl {
     cmd_opts: CmdOptions,
     jwks: Jwks,
     valid_tokens: Arc<Mutex<Vec<String>>>,
+    server_ld: Option<[u8; 48]>,
 }
 
 #[tonic::async_trait]
@@ -82,6 +85,8 @@ impl FlightService for FlightServiceImpl {
         let mut cnt = 0;
         // Process incoming HandshakeRequests
         let valid_tokens = self.valid_tokens.clone();
+        let mut challenge = [0u8; 64];
+        let server_ld = self.server_ld.clone();
         let output_stream = async_stream::try_stream! {
             while let Some(handshake_request) = inbound.next().await {
                 let req = handshake_request?;
@@ -92,7 +97,6 @@ impl FlightService for FlightServiceImpl {
                         bytes::Bytes::copy_from_slice(snpguest::report::TEST_REQ_DATA)
                     } else {
                         // challenge must be 64 bytes
-                        let mut challenge = [0u8; 64];
                         OsRng.fill_bytes(&mut challenge);
                         bytes::Bytes::copy_from_slice(&challenge)
                     };
@@ -109,16 +113,29 @@ impl FlightService for FlightServiceImpl {
                     let certs_dir = std::path::PathBuf::from("/tmp/ext-grpc-server/snpguest/certs");
                     let att_res = snpguest::verify2::fetch_and_verify_async(certs_dir, att_path, true).await;
                     println!("handshake rquest2 done");
-                    match att_res {
+                    let att_report = match att_res {
                         Err(e) => {
                             println!("failed to verify attestation report: {:#?}", e);
                             Err(Status::unauthenticated(format!("failed to verify attestation report: {:#?}", e)))
                         },
-                        Ok(_) => {
+                        Ok(r) => {
                             println!("successfully verified attestation report");
-                            Ok(())
+                            Ok(r)
                         }
                     }?;
+                    if att_report.report_data != challenge {
+                        println!("attestation report data does not match challenge");
+                        return Err(Status::unauthenticated("attestation report data does not match challenge"))?
+                    }
+                    if let Some(ld) = server_ld {
+                        if att_report.measurement != ld {
+                            println!("launch digest does not match expected value");
+                            return Err(Status::unauthenticated("launch digest does not match expected value"))?
+                        }
+                        println!("successfully verified launch digest");
+                    } else {
+                        println!("no server-ld configured, skipping");
+                    }
                     let mut token = [0u8; 64];
                     OsRng.fill_bytes(&mut token);
                     let token = token.into_iter()
@@ -489,10 +506,14 @@ pub struct CmdOptions {
     /// use test challenge for non SEV-SNP environment
     #[argh(switch)]
     use_test_challenge: bool,
+
+    #[argh(option)]
+    /// expected server launch digest in base64 format
+    server_ld: Option<String>,
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     let cmd_opts: CmdOptions = argh::from_env();
 
     let addr = format!("0.0.0.0:{}", cmd_opts.port).parse()?;
@@ -500,10 +521,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let jwks_url = "https://seera-networks.jp.auth0.com/.well-known/jwks.json";
     let jwks = Jwks::from_jwks_url(jwks_url).await?;
 
+    let server_ld = if let Some(server_ld) = &cmd_opts.server_ld {
+        let base64_engine = base64::engine::general_purpose::STANDARD;
+        let res =base64_engine.decode(server_ld.as_bytes())?;
+        if res.len() != 48 {
+            return Err(anyhow!("server_ld must be 48 bytes when decoded, but got {}", res.len()));
+        }
+        Some(res[0..48].try_into().unwrap())
+    } else {
+        None
+    };
     let service = FlightServiceImpl {
         cmd_opts: cmd_opts.clone(),
         jwks,
         valid_tokens: Arc::new(Mutex::new(Vec::new())),
+        server_ld: server_ld,
     };
 
     let svc = FlightServiceServer::new(service);

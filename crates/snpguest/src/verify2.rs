@@ -1,4 +1,5 @@
 use super::*;
+use sev::firmware::guest::AttestationReport;
 use sev::firmware::host::CertType;
 use std::io::Write;
 use std::path::PathBuf;
@@ -15,14 +16,15 @@ pub struct Args {
 }
 
 pub async fn fetch_and_verify(args: Args) -> Result<()> {
-    fetch_and_verify_async(args.certs_dir, args.ext_att_report_path, false).await
+    fetch_and_verify_async(args.certs_dir, args.ext_att_report_path, false).await?;
+    Ok(())
 }
 
 pub async fn fetch_and_verify_async(
     cert_dir: PathBuf,
     ext_att_path: PathBuf,
     quiet: bool,
-) -> Result<()> {
+) -> Result<AttestationReport> {
     let ext_att_bin =
         std::fs::read(&ext_att_path).context("failed to read extended attestation reoprt")?;
     let ext_att: report::ExtendedAttestationReport =
@@ -114,5 +116,5 @@ pub async fn fetch_and_verify_async(
     verify::attestation::verify_attestation(verify_args, true)
         .context("failed to validate attestation report")?;
 
-    return Ok(());
+    return Ok(ext_att.report);
 }
