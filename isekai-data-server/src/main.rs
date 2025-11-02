@@ -93,16 +93,15 @@ impl FlightService for FlightServiceImpl {
                 let resp = if cnt == 0 {
                     println!("handshake rquest1");
                     cnt += 1;
-                    let payload = if cmd_opts.use_test_challenge {
-                        bytes::Bytes::copy_from_slice(snpguest::report::TEST_REQ_DATA)
+                    if cmd_opts.use_test_challenge {
+                        challenge.copy_from_slice(&snpguest::report::TEST_REQ_DATA[0..64]);
                     } else {
                         // challenge must be 64 bytes
                         OsRng.fill_bytes(&mut challenge);
-                        bytes::Bytes::copy_from_slice(&challenge)
-                    };
+                    }
                     HandshakeResponse {
                         protocol_version: 1,
-                        payload: payload,
+                        payload: bytes::Bytes::copy_from_slice(&challenge),
                     }
                 } else if cnt == 1{
                     println!("handshake rquest2");
