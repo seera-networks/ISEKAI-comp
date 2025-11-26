@@ -5,6 +5,9 @@ Dagリファレンス
 - [Id](#id)
 - [Head](#head)
 - [Count](#count)
+- [Mean](#mean)
+- [Median](#median)
+- [Mode](#mode)
 - [Var](#var)
 - [Add](#add)
 - [Sub](#sub)
@@ -56,6 +59,7 @@ dag.Idは与えられたノードのデータ列をそのまま返します。
 
 # Head
 dag.Headは第一引数で指定したノードのデータ列を第2引数で指定した数字の数だけ返します。
+
 第一引数は配列とし、複数のノードを指定することもできます。
 
 例
@@ -68,6 +72,7 @@ dag.Headは第一引数で指定したノードのデータ列を第2引数で�
 
 # Count
 dag.Countは第一引数で指定したノードのデータ列の個数を返します。
+
 第一引数は配列とし、複数のノードを指定することもできます。
 
 例
@@ -78,8 +83,48 @@ dag.Countは第一引数で指定したノードのデータ列の個数を返�
     .build()
 ```
 
+# Mean
+dag.Meanは第一引数で指定したノードのデータ列の平均値を計算します。
+
+第一引数は配列とし、複数のノードを指定することもできます。
+
+例
+```
+(d, rni) = dag.DAGBuilder() \
+    .add(dag.Mean(dag.Loc("educ"))) \
+    .add(dag.Mean([dag.Loc("educ"), dag.Loc("wage")])) \
+    .build()
+```
+
+# Median
+dag.Medianは第一引数で指定したノードのデータ列の中央値を計算します。
+
+第一引数は配列とし、複数のノードを指定することもできます。
+
+例
+```
+(d, rni) = dag.DAGBuilder() \
+    .add(dag.Median(dag.Loc("educ"))) \
+    .add(dag.Median([dag.Loc("educ"), dag.Loc("wage")])) \
+    .build()
+```
+
+# Mode
+dag.Modeは第一引数で指定したノードのデータ列の最頻値を計算します。
+
+第一引数は配列とし、複数のノードを指定することもできます。
+
+例
+```
+(d, rni) = dag.DAGBuilder() \
+    .add(dag.Mode(dag.Loc("educ"))) \
+    .add(dag.Mode([dag.Loc("educ"), dag.Loc("wage")])) \
+    .build()
+```
+
 # Var
 dag.Varは第一引数で指定したノードのデータ列の分散を計算します。
+
 第一引数は配列とし、複数のノードを指定することもできます。
 
 例
