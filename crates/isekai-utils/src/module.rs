@@ -105,6 +105,12 @@ pub struct FullArg {
 jsonize!(FullArg);
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct ModeArg {
+    pub dropna: bool,
+}
+jsonize!(ModeArg);
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct VarArg {
     pub ddof: usize,
 }
