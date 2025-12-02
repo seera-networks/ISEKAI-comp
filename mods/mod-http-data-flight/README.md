@@ -1,15 +1,15 @@
-# データ提供モジュールについて
-- データ提供モジュールは、ISEKAI計算上で動作し、ISEKAIデータサーバに接続してデータを取得するモジュールです。
+# ISEKAIデータ提供モジュールについて
+- ISEKAIデータ提供モジュールは、ISEKAI計算上で動作し、ISEKAIデータサーバに接続してデータを取得するモジュールです。
 - Rustで書かれたWASMモジュールを含み、接続先情報などが書き込まれたファイルです。
 - ISEKAI計算にアップロードして使用します。
 
-# データ提供モジュールのビルド方法
+# ISEKAIデータ提供モジュールのビルド方法
 ## 前提
 - サーバー: Ubuntu 24.04
 - ISEKAIデータサーバーが動作するホストのドメイン名とポート: isekai-data.example.com:50053
 
 ## Rust のインストール
-- データ提供モジュールのMSRV (Minimum Supported Rust Version)は、現在、1.90.0です。これ以前のバージョンでのビルドはサポートしていません。
+- ISEKAIデータ提供モジュールのMSRV (Minimum Supported Rust Version)は、現在、1.90.0です。これ以前のバージョンでのビルドはサポートしていません。
 
 1. 必要パッケージをインストール（Ubuntu 24.04）:
     ```
@@ -63,6 +63,6 @@
     ../../bin/yakcli build
     ```
 
-4. カレントディレクトリにmod-http-data-flight.yakが生成されているので、ISEKAI計算にアップロードする。
+4. カレントディレクトリにmod-http-data-flight.yakが生成されているので、[ISEKAIデータ提供モジュール Uploader](https://yakserv.seera-networks.com/)を用いてアップロードする。
 
 ---

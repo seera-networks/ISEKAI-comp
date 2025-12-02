@@ -6,6 +6,6 @@
 - [ISEKAIデータサーバー](isekai-data-server)は、ISEKAI計算にデータを提供するためのサーバです。
 インターネットから直接到達可能なホストで動かす必要があります。
 
-## データ提供モジュール
-- [データ提供モジュール](mods/mod-http-data-flight)は、ISEKAI計算上で動作し、
+## ISEKAIデータ提供モジュール
+- [ISEKAIデータ提供モジュール](mods/mod-http-data-flight)は、ISEKAI計算上で動作し、
 ISEKAIデータサーバに接続してデータを取得するモジュールです。
