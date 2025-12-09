@@ -6,4 +6,9 @@ ISEKAI計算はセキュアなデータ処理を可能にする計算プラッ�
 
 早速使ってみましょう。[ISEKAI計算用JupyterLite](https://seera-networks.github.io/jupyterlite/)にアクセスし、QuickStart.ipynbを開きます。指示通りに実行等をしてみてください。
 
+なお、data_tokenには次の文字列を指定してください。
+```
+qmiiIlyjN5
+```
+
 計算を記述するためのDagの詳しい説明は[Dagリファレンス](dag-reference.md)にあります。
