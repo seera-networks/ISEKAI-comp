@@ -11,7 +11,7 @@ ISEKAI計算
 セキュアな計算プラットフォームISEKAI計算を利用するための付属ソフトウェアを公開しています。
 
 # QuickStart
-- 最初に試す場合は[QuickStart](QuickStart)を読んでください。
+- 最初に試す場合は[QuickStart](QuickStart.md)を読んでください。
 
 # ISEKAIデータサーバー
 - [ISEKAIデータサーバー](isekai-data-server)は、ISEKAI計算にデータを提供するためのサーバです。
