@@ -1,15 +1,42 @@
-# ISEKAIデータサーバーについて
+ISEKAIデータサーバー説明書
+--
+<!-- TOC -->
+- [概要](#概要)
+- [使い方](#使い方)
+  - [前提](#前提)
+  - [Rust のインストール](#rust-のインストール)
+  - [ビルド](#ビルド)
+  - [データの用意](#データの用意)
+  - [起動](#起動)
+  - [ngrokの起動（クライアント端末で動作させる場合）](#ngrokの起動クライアント端末で動作させる場合)
+  - [利用できるユーザの制限](#利用できるユーザの制限)
+- [certbot を使ったLet's Encryptの証明書設定手順](#certbot-を使ったlets-encryptの証明書設定手順)
+  - [前提](#前提-1)
+  - [インストール（推奨: snap）](#インストール推奨-snap)
+  - [方法1: Nginx 自動設定（簡単）](#方法1-nginx-自動設定簡単)
+  - [方法2: Webroot（静的ファイル配信を使う）](#方法2-webroot静的ファイル配信を使う)
+  - [方法3: Standalone（ポート 80 を一時的に使用）](#方法3-standaloneポート-80-を一時的に使用)
+  - [証明書の所有者の変更（isekai-data-serverを動かすユーザへの変更）](#証明書の所有者の変更isekai-data-serverを動かすユーザへの変更)
+  - [証明書の場所](#証明書の場所)
+  - [自動更新](#自動更新)
+  - [トラブルシューティング](#トラブルシューティング)
+<!-- /TOC -->
+
+# 概要
 - ISEKAIデータサーバー（isekai-data-server）は、ISEKAI計算にデータを提供するためのサーバーソフトウェアです。
 - Rustで書かれており、データソースとしては、CSVファイルを用いることができます（Edinetのデータを提供する場合にはsqliteを使います）。
-- ISEKAI計算とISEKAIデータサーバーの間の通信はTLSで暗号化するため証明書が必要です。
-独自の認証局を作成し、証明書を発行し、ISEKAI計算の上で動かすデータ提供モジュールに認証局の証明書を含めることもできますが、
-Let's Encryptで発行できる証明書を利用することで、認証局の証明書を含めることなく接続を行うことができます
+- ISEKAIデータサーバーを動作させる環境としては、クライアント端末（ngrok使用）と独自サーバーの2つがあります。
+  - クライアント端末で動作させる場合、[ngrok](https://ngrok.com/)を使用して、インターネットからアクセスできるようにします。
+  - 独自サーバーで動作させる場合、ISEKAI計算とISEKAIデータサーバーの間の通信はTLSで暗号化するため証明書が必要です。
+  独自の認証局を作成し、証明書を発行し、ISEKAI計算の上で動かすデータ提供モジュールに認証局の証明書を含めることもできますが、
+  Let's Encryptで発行できる証明書を利用することで、認証局の証明書を含めることなく接続を行うことができます
 （Let's Encryptの利用は無料です）。
 
-# ISEKAIデータサーバーの使い方
+# 使い方
 ## 前提
-- サーバー: Ubuntu 24.04
-- ISEKAIデータサーバーが用いるドメイン名: isekai-data.example.com
+- 動作環境: Ubuntu 24.04（WinodwsでもWSL2を利用することで利用できます）
+- ISEKAIデータサーバーが用いるドメイン名（独自サーバーの場合）: isekai-data.example.com
+- ISEKAIデータサーバーが用いるドメイン名（ngrok経由の場合）: xxx.ngrok-free.dev（ngrokにログインして、左のメニューのDomainsにアクセスすると確認できます）
 
 ## Rust のインストール
 - ISEKAIデータサーバーのMSRV (Minimum Supported Rust Version)は、現在、1.90.0です。これ以前のバージョンでのビルドはサポートしていません。
@@ -73,6 +100,20 @@ gen_certs.shで指定しているドメイン名をlocalhostからisekai-data.ex
     ```
     ../target/x86_64-unknown-linux-gnu/release/isekai-data-server --csv-file wooldridge/raw_data/data_csv/wage1.csv --policy-db ./policy.db --key ./certs/server.key --cert ./certs/server.crt
     ```
+- isekai-data-serverのディレクトリで以下を実行（ngrok経由でアクセスさせる場合）:
+    ```
+    ../target/x86_64-unknown-linux-gnu/release/isekai-data-server --csv-file wooldridge/raw_data/data_csv/wage1.csv --policy-db ./policy.db --no-tls
+    ```
+## ngrokの起動（クライアント端末で動作させる場合）
+1. [ngrok](https://ngrok.com/)のアカウントを作成し、ngrokコマンドをインストールします（アカウントを作成してログインすると導入手順が表示されます）。
+
+2. ngrokを以下のように起動します。
+   ```
+   ngrok http --domain=xxx.ngrok-free.dev --upstream-protocol=http2 50053
+   ```
+   （注意）ngrok経由でアクセスできるようにする場合、ISEKAI計算以外からもデータ取得が行われる可能性があります（認証はありますが、認証方式を公開しているので完全ではありません）。
+   予期せぬデータ漏洩が万が一にも起きないよう、以下に記述する[利用できるユーザの制限](#利用できるユーザの制限)の方法を利用してアクセス制限を行うことをお勧めします。
+
 ## 利用できるユーザの制限
 - ISEKAI計算では、[YakAuth](https://seera-networks.github.io/YakAuth/)で発行したトークン（JWT）を使用してユーザの認証を行います。ISEKAIデータサーバーでは、特定のユーザーがISEKAI計算を利用する場合のみデータを提供するように設定できます。
 1. YakAuthで利用したいユーザのトークンを取得する。
