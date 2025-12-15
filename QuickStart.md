@@ -8,7 +8,7 @@ ISEKAI計算はセキュアなデータ処理を可能にする計算プラッ�
 
 なお、data_tokenには次の文字列を指定してください。
 ```
-qmiiIlyjN5
+CqRjmM2HHO
 ```
 
 計算を記述するためのDagの詳しい説明は[Dagリファレンス](dag-reference.md)にあります。
