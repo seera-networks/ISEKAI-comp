@@ -61,6 +61,7 @@ jsonize_bytes!(YakModuleHeader);
 pub struct ExternalCommunication {
     pub endpoint: String,
     pub use_tls: bool,
+    pub use_mtls: bool,
     pub ca_cert_pem: Option<Vec<u8>>,
 }
 

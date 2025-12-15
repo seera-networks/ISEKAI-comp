@@ -5,4 +5,5 @@ files = []
 [external_com]
 endpoint = "https://localhost:50053"
 use_tls = true
+use_mtls = true
 ca_cert = "../../isekai-data-server/certs/ca.crt"
