@@ -66,7 +66,15 @@ pub struct HistogramVerifierArg {
 jsonize!(HistogramVerifierArg);
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct LocArg {
+    pub exec_name: String,
+    pub column_name: String,
+}
+jsonize!(LocArg);
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct LoadArg {
+    pub exec_name: String,
     pub target: String,
     pub column_name: String,
 }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct YakGrpcInput {
-    pub execution: String,
+    pub executions: Vec<String>,
     pub dag: String,
 }
 jsonize!(YakGrpcInput);

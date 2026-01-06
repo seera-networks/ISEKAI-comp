@@ -9,9 +9,9 @@ use std::{collections::HashMap, fs::File, io::BufReader, path::Path};
 pub struct Modules {
     pub procedure: Module,
     #[serde(default)]
-    pub execution: Option<Module>,
+    pub executions: Vec<Module>,
     #[serde(default)]
-    pub http_execution: Option<Module>,
+    pub http_executions: Vec<Module>,
     pub functions: Vec<Module>,
     #[serde(default)]
     pub http_functions: Vec<Module>,
