@@ -31,7 +31,7 @@ Dagリファレンス
 - [WaldTestLogisticRegression](#waldtestlogisticregression)
 <!-- /TOC -->
 # Loc
-dag.Locは与えられた引数の名前のデータ列を返します。
+dag.Locは第一引数で指定されたデータトークンのデータソースから第二引数で指定された名前のデータ列を取得し、返します。
 
 dag.Locはデータを取得する特別な種類のノードで、末端ノードに指定できません。
 取得したデータをそのまま返したい場合はdag.Idと組み合わせます。
@@ -39,7 +39,7 @@ dag.Locはデータを取得する特別な種類のノードで、末端ノー�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Id(dag.Loc("wage"))) \
+    .add(dag.Id(dag.Loc("CqRjmM2HHO", "wage"))) \
     .build()
 ```
 
@@ -52,8 +52,8 @@ dag.Idは与えられたノードのデータ列をそのまま返します。
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Id(dag.Loc("educ"), ["education"])) \
-    .add(dag.Id([dag.Loc("educ"), dag.Loc("wage")], ["education", "wage"])) \
+    .add(dag.Id(dag.Loc("CqRjmM2HHO", "educ"), ["education"])) \
+    .add(dag.Id([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")], ["education", "wage"])) \
     .build()
 ```
 
@@ -65,8 +65,8 @@ dag.Headは第一引数で指定したノードのデータ列を第2引数で�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Head(dag.Loc("educ"), 5)) \
-    .add(dag.Head([dag.Loc("educ"), dag.Loc("wage")], 5)) \
+    .add(dag.Head(dag.Loc("CqRjmM2HHO", "educ"), 5)) \
+    .add(dag.Head([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")], 5)) \
     .build()
 ```
 
@@ -78,8 +78,8 @@ dag.Countは第一引数で指定したノードのデータ列の個数を返�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Count(dag.Loc("educ"))) \
-    .add(dag.Count([dag.Loc("educ"), dag.Loc("wage")])) \
+    .add(dag.Count(dag.Loc("CqRjmM2HHO", "educ"))) \
+    .add(dag.Count([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
     .build()
 ```
 
@@ -91,8 +91,8 @@ dag.Meanは第一引数で指定したノードのデータ列の平均値を計
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Mean(dag.Loc("educ"))) \
-    .add(dag.Mean([dag.Loc("educ"), dag.Loc("wage")])) \
+    .add(dag.Mean(dag.Loc("CqRjmM2HHO", "educ"))) \
+    .add(dag.Mean([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
     .build()
 ```
 
@@ -104,8 +104,8 @@ dag.Medianは第一引数で指定したノードのデータ列の中央値を�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Median(dag.Loc("educ"))) \
-    .add(dag.Median([dag.Loc("educ"), dag.Loc("wage")])) \
+    .add(dag.Median(dag.Loc("CqRjmM2HHO", "educ"))) \
+    .add(dag.Median([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
     .build()
 ```
 
@@ -117,8 +117,8 @@ dag.Modeは第一引数で指定したノードのデータ列の最頻値を計
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Mode(dag.Loc("educ"))) \
-    .add(dag.Mode([dag.Loc("educ"), dag.Loc("wage")])) \
+    .add(dag.Mode(dag.Loc("CqRjmM2HHO", "educ"))) \
+    .add(dag.Mode([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
     .build()
 ```
 
@@ -130,8 +130,8 @@ dag.Varは第一引数で指定したノードのデータ列の分散を計算�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Var(dag.Loc("educ"))) \
-    .add(dag.Var([dag.Loc("educ"), dag.Loc("wage")])) \
+    .add(dag.Var(dag.Loc("CqRjmM2HHO", "educ"))) \
+    .add(dag.Var([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
     .build()
 ```
 
@@ -144,9 +144,9 @@ dag.Addは第一引数のみの場合、配列で指定したノードのデー�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Add([dag.Loc("educ"), dag.Loc("wage")])) \
-    .add(dag.Add(dag.Loc("educ"), 1.0)) \
-    .add(dag.Add([dag.Loc("educ"), dag.Loc("wage"), dag.Loc("exper")], 1.0)) \
+    .add(dag.Add([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
+    .add(dag.Add(dag.Loc("CqRjmM2HHO", "educ"), 1.0)) \
+    .add(dag.Add([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage"), dag.Loc("CqRjmM2HHO", "exper")], 1.0)) \
     .build()
 ```
 
@@ -159,9 +159,9 @@ dag.Subは第一引数のみの場合、配列で指定した最初のノード�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Sub([dag.Loc("educ"), dag.Loc("wage")])) \
-    .add(dag.Sub(dag.Loc("educ"), 1.0)) \
-    .add(dag.Sub([dag.Loc("educ"), dag.Loc("wage"), dag.Loc("exper")], 1.0)) \
+    .add(dag.Sub([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
+    .add(dag.Sub(dag.Loc("CqRjmM2HHO", "educ"), 1.0)) \
+    .add(dag.Sub([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage"), dag.Loc("CqRjmM2HHO", "exper")], 1.0)) \
     .build()
 ```
 
@@ -174,9 +174,9 @@ dag.Mulは第一引数のみの場合、配列で指定した最初のノード�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Mul([dag.Loc("educ"), dag.Loc("wage")])) \
-    .add(dag.Mul(dag.Loc("educ"), 2.0)) \
-    .add(dag.Mul([dag.Loc("educ"), dag.Loc("wage"), dag.Loc("exper")], 2.0)) \
+    .add(dag.Mul([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
+    .add(dag.Mul(dag.Loc("CqRjmM2HHO", "educ"), 2.0)) \
+    .add(dag.Mul([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage"), dag.Loc("CqRjmM2HHO", "exper")], 2.0)) \
     .build()
 ```
 
@@ -189,9 +189,9 @@ dag.Divは第一引数のみの場合、配列で指定した最初のノード�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Div([dag.Loc("educ"), dag.Loc("wage")])) \
-    .add(dag.Div(dag.Loc("educ"), 2.0)) \
-    .add(dag.Div([dag.Loc("educ"), dag.Loc("wage"), dag.Loc("exper")], 2.0)) \
+    .add(dag.Div([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
+    .add(dag.Div(dag.Loc("CqRjmM2HHO", "educ"), 2.0)) \
+    .add(dag.Div([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage"), dag.Loc("CqRjmM2HHO", "exper")], 2.0)) \
     .build()
 ```
 
@@ -202,8 +202,8 @@ dag.Logは第一引数で指定したノードのデータ列の自然対数を�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Log(dag.Loc("educ"))) \
-    .add(dag.Log([dag.Loc("educ"), dag.Loc("wage")])) \
+    .add(dag.Log(dag.Loc("CqRjmM2HHO", "educ"))) \
+    .add(dag.Log([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
     .build()
 ```
 
@@ -214,7 +214,7 @@ dag.Gtは第一引数で指定したノードのデータ列と第二引数で�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Gt(dag.Loc("educ"), dag.Loc("wage"))) \
+    .add(dag.Gt(dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage"))) \
     .build()
 ```
 
@@ -226,7 +226,7 @@ dag.Fullは第一引数で指定した値でデータ列を作ります。
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Full("Hello", dag.Loc("educ"))) \
+    .add(dag.Full("Hello", dag.Loc("CqRjmM2HHO", "educ"))) \
     .build()
 ```
 
@@ -238,8 +238,8 @@ Nullの場合はtrueを返し、Nullでない場合はfalseを返します。
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Null([dag.Loc("educ")])) \
-    .add(dag.Null([dag.Loc("educ"), dag.Loc("wage")])) \
+    .add(dag.Null([dag.Loc("CqRjmM2HHO", "educ")])) \
+    .add(dag.Null([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
     .build()
 ```
 
@@ -251,8 +251,8 @@ nanの場合はtrueを返し、nanでない場合はfalseを返します。
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Nan([dag.Loc("educ")])) \
-    .add(dag.Nan([dag.Loc("educ"), dag.Loc("wage")])) \
+    .add(dag.Nan([dag.Loc("CqRjmM2HHO", "educ")])) \
+    .add(dag.Nan([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
     .build()
 ```
 
@@ -263,7 +263,7 @@ falseの場合0として文字列を作成します。
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.BoolToStr([dag.Gt(dag.Loc("educ"), dag.Loc("wage")), dag.Gt(dag.Loc("educ"), dag.Loc("exper"))])) \
+    .add(dag.BoolToStr([dag.Gt(dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")), dag.Gt(dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "exper"))])) \
     .build()
 ```
 
@@ -273,7 +273,7 @@ dag.Columnは第一引数のノードのデータ列から、第2引数で指定
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Column(dag.Null([dag.Loc("educ"), dag.Loc("wage")]), ["educ"])) \
+    .add(dag.Column(dag.Null([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")]), ["educ"])) \
     .build()
 ```
 
@@ -283,7 +283,7 @@ dag.Zipは第一引数のノードのデータ列を一行ごとに結合した�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Zip([dag.Loc("educ"), dag.Loc("wage")])) \
+    .add(dag.Zip([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
     .build()
 ```
 
@@ -293,7 +293,7 @@ dag.Notは第一引数のノードのデータ列がtrueであればfalse、fals
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Not([dag.Null([dag.Loc("educ")])])) \
+    .add(dag.Not([dag.Null([dag.Loc("CqRjmM2HHO", "educ")])])) \
     .build()
 ```
 
@@ -311,9 +311,9 @@ dag.CmpArithは第一引数のノードのデータ列を第二引数の数値�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.CmpArith([dag.Loc("educ")], 1.0, "LT")) \
-    .add(dag.CmpArith([dag.Loc("educ")], 1.0, "EQ")) \
-    .add(dag.CmpArith([dag.Loc("educ")], 1.0, "GT")) \
+    .add(dag.CmpArith([dag.Loc("CqRjmM2HHO", "educ")], 1.0, "LT")) \
+    .add(dag.CmpArith([dag.Loc("CqRjmM2HHO", "educ")], 1.0, "EQ")) \
+    .add(dag.CmpArith([dag.Loc("CqRjmM2HHO", "educ")], 1.0, "GT")) \
     .build()
 ```
 
@@ -332,9 +332,9 @@ dag.Whereは第一引数のノードのデータ列を第二引数の数値を�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.Where([dag.Loc("educ")], 1.0, "LT", "3.0")) \
-    .add(dag.Where([dag.Loc("educ")], 1.0, "EQ", "3.0")) \
-    .add(dag.Where([dag.Loc("educ")], 1.0, "GT", "3.0")) \
+    .add(dag.Where([dag.Loc("CqRjmM2HHO", "educ")], 1.0, "LT", "3.0")) \
+    .add(dag.Where([dag.Loc("CqRjmM2HHO", "educ")], 1.0, "EQ", "3.0")) \
+    .add(dag.Where([dag.Loc("CqRjmM2HHO", "educ")], 1.0, "GT", "3.0")) \
     .build()
 ```
 
@@ -346,7 +346,7 @@ trueの場合、第二のノードのデータ列の値を選択し、falseの�
 例
 ```
 (d, rni) = dag.DAGBuilder() \
-    .add(dag.If([dag.CmpArith([dag.Loc("educ")], 15.0, "LT"), dag.Loc("educ"), dag.Loc("wage")])) \
+    .add(dag.If([dag.CmpArith([dag.Loc("CqRjmM2HHO", "educ")], 15.0, "LT"), dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "wage")])) \
     .build()
 ```
 
@@ -359,8 +359,8 @@ dag.LinearRegressionは第一引数の配列で2つ以上のデータ列を提�
 
 例
 ```
-dag_Y = dag.Id(dag.Log(dag.Loc("wage")), ["wage_log"])
-dag_X = dag.Id([dag.Loc("educ"), dag.Loc("tenure"), dag.Loc("exper")])
+dag_Y = dag.Id(dag.Log(dag.Loc("CqRjmM2HHO", "wage")), ["wage_log"])
+dag_X = dag.Id([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "tenure"), dag.Loc("CqRjmM2HHO", "exper")])
 (d, rni) = dag.DAGBuilder() \
     .add(dag.LinearRegression([dag_Y, dag_X])) \
     .build()
@@ -375,8 +375,8 @@ dag.TTestLinearRegressionは第一引数の配列で2つ以上のデータ列を
 
 例
 ```
-dag_Y = dag.Id(dag.Log(dag.Loc("wage")), ["wage_log"])
-dag_X = dag.Id([dag.Loc("educ"), dag.Loc("tenure"), dag.Loc("exper")])
+dag_Y = dag.Id(dag.Log(dag.Loc("CqRjmM2HHO", "wage")), ["wage_log"])
+dag_X = dag.Id([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "tenure"), dag.Loc("CqRjmM2HHO", "exper")])
 dag_linear_regression = dag.LinearRegression([dag_Y, dag_X])
 (d, rni) = dag.DAGBuilder() \
     .add(dag.TTestLinearRegression([dag_Y, dag_X], dag_linear_regression)) \
@@ -393,8 +393,8 @@ dag.LogisticRegressionは第一引数の配列で2つ以上のデータ列を提
 
 例
 ```
-dag_Y = dag.Id(dag.CmpArith(dag.Loc("wage"), mean_wage, "GE"), ["wage_gt_mean"])
-dag_X = dag.Id([dag.Loc("educ"), dag.Loc("tenure"), dag.Loc("exper")])
+dag_Y = dag.Id(dag.CmpArith(dag.Loc("CqRjmM2HHO", "wage"), mean_wage, "GE"), ["wage_gt_mean"])
+dag_X = dag.Id([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "tenure"), dag.Loc("CqRjmM2HHO", "exper")])
 dag_logistic_regression = dag.LogisticRegression([dag_Y, dag_X])
 (d, rni) = dag.DAGBuilder() \
     .add(dag.LogisticRegression([dag_Y, dag_X])) \
@@ -411,8 +411,8 @@ dag.WaldTestLogisticRegressionは第一引数の配列で一つ以上のデー�
 
 例
 ```
-dag_Y = dag.Id(dag.CmpArith(dag.Loc("wage"), mean_wage, "GE"), ["wage_gt_mean"])
-dag_X = dag.Id([dag.Loc("educ"), dag.Loc("tenure"), dag.Loc("exper")])
+dag_Y = dag.Id(dag.CmpArith(dag.Loc("CqRjmM2HHO", "wage"), mean_wage, "GE"), ["wage_gt_mean"])
+dag_X = dag.Id([dag.Loc("CqRjmM2HHO", "educ"), dag.Loc("CqRjmM2HHO", "tenure"), dag.Loc("CqRjmM2HHO", "exper")])
 dag_logistic_regression = dag.LogisticRegression([dag_Y, dag_X])
 (d, rni) = dag.DAGBuilder() \
     .add(dag.WaldTestLogisticRegression(dag_X, dag_logistic_regression)) \
