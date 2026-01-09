@@ -14,8 +14,11 @@ use std::{
 
 use sev::{
     certs::snp::{ca, Certificate, Chain},
-    firmware::{guest::Firmware, host::CertType},
+    firmware::host::CertType,
 };
+
+#[cfg(target_os = "linux")]
+use sev::firmware::guest::Firmware;
 
 pub struct CertPaths {
     pub ark_path: PathBuf,
@@ -186,6 +189,7 @@ pub struct CertificatesArgs {
     pub certs_dir: PathBuf,
 }
 
+#[cfg(target_os = "linux")]
 #[allow(dead_code)]
 pub fn get_ext_certs(args: CertificatesArgs) -> Result<()> {
     let mut sev_fw: Firmware = Firmware::open().context("failed to open SEV firmware device.")?;
@@ -227,6 +231,7 @@ pub fn get_ext_certs(args: CertificatesArgs) -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 pub fn get_vlek_cert_pem() -> Result<Vec<u8>> {
     let mut sev_fw: Firmware = Firmware::open().context("failed to open SEV firmware device.")?;
 

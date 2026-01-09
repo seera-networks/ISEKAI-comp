@@ -4,15 +4,22 @@
 use super::*;
 
 use std::{
-    fs::{self, File, OpenOptions},
-    io::{Read, Write},
+    fs::{self, File},
+    io::Write,
     path::PathBuf,
+};
+#[cfg(target_os = "linux")]
+use std::{
+    fs::OpenOptions,
+    io::Read,
 };
 
 use anyhow::{anyhow, Result};
 use rand::{thread_rng, RngCore};
 use serde::{Deserialize, Serialize};
-use sev::firmware::guest::{AttestationReport, Firmware};
+use sev::firmware::guest::AttestationReport;
+#[cfg(target_os = "linux")]
+use sev::firmware::guest::Firmware;
 
 // Read a bin-formatted attestation report.
 pub fn read_report(att_report_path: PathBuf) -> Result<AttestationReport, anyhow::Error> {
@@ -130,6 +137,7 @@ fn request_hardware_report(
     hyperv::report::get(vmpl.unwrap_or(0))
 }
 
+#[cfg(target_os = "linux")]
 #[cfg(not(feature = "hyperv"))]
 fn request_hardware_report(data: Option<[u8; 64]>, vmpl: Option<u32>) -> Result<AttestationReport> {
     let mut fw = Firmware::open().context("unable to open /dev/sev-guest")?;
@@ -137,6 +145,7 @@ fn request_hardware_report(data: Option<[u8; 64]>, vmpl: Option<u32>) -> Result<
         .context("unable to fetch attestation report")
 }
 
+#[cfg(target_os = "linux")]
 // Request attestation report and write it into a file
 pub fn get_report(args: ReportArgs, hv: bool) -> Result<()> {
     args.verify(hv)?;
@@ -192,6 +201,7 @@ pub fn get_report(args: ReportArgs, hv: bool) -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 pub fn get_report_direct(direct_args: &ReportDirectArgs) -> Result<ExtendedAttestationReport> {
     let att = if direct_args.request_data.eq(&TEST_REQ_DATA[0..64]) {
         let att = bincode::deserialize(&TEST_ATT_REPORT)
@@ -217,6 +227,7 @@ pub fn get_report_direct(direct_args: &ReportDirectArgs) -> Result<ExtendedAttes
     //Ok(bincode::serialize(&ext_report).unwrap())
 }
 
+#[cfg(target_os = "linux")]
 fn reqdata_write(name: PathBuf, report: &AttestationReport) -> Result<()> {
     let mut file = OpenOptions::new()
         .create(true)

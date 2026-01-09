@@ -33,10 +33,12 @@ x509-parser = { version="^0.14", features=["verify"] }
 asn1-rs = "0.5.2"
 rand = "0.8.5"
 tss-esapi = { version = "7.2", optional=true }
-msru = "0.2.0"
 colorful = "0.2.2"
 bitfield = "0.13.2"
 clap-num = "1.1.1"
 base64 = "0.22.1"
 tokio = "1.41.0"
 tempfile = {workspace = true}
+
+[target.'cfg(target_os = "linux")'.dependencies]
+msru = "0.2.0"
