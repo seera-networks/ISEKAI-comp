@@ -73,7 +73,7 @@ pub struct ReportArgs {
 pub const TEST_ATT_REPORT: &'static [u8] = include_bytes!("../test/att.bin");
 pub const TEST_REQ_DATA: &'static [u8] = include_bytes!("../test/req.bin");
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq, Eq, Hash)]
 pub struct AttestationConfig {
     pub proc_type: fetch::ProcType,
     pub endorsement: fetch::Endorsement,

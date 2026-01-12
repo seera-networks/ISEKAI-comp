@@ -17,7 +17,7 @@ pub enum FetchCmd {
     Vcek(vcek::Args),
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum Endorsement {
     /// Versioned Chip Endorsement Key
     Vcek,
@@ -46,7 +46,7 @@ impl FromStr for Endorsement {
         }
     }
 }
-#[derive(ValueEnum, Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(ValueEnum, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ProcType {
     /// 3rd Gen AMD EPYC Processor (Standard)
     Milan,

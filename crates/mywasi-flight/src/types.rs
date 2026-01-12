@@ -19,8 +19,8 @@ use wasmtime_wasi::p2::Pollable;
 
 pub enum FlightClientState {
     Default,
-    Connecting(oneshot::Receiver<anyhow::Result<Channel>>),
-    ConnectReady(Result<anyhow::Result<Channel>, RecvError>),
+    Connecting(oneshot::Receiver<anyhow::Result<FlightServiceClient<Channel>>>),
+    ConnectReady(Result<anyhow::Result<FlightServiceClient<Channel>>, RecvError>),
     Connected(FlightServiceClient<Channel>),
     HandshakeProgress(oneshot::Receiver<(FlightServiceClient<Channel>, tonic::Result<String>)>),
     HandshakeReady(Result<(FlightServiceClient<Channel>, tonic::Result<String>), RecvError>),

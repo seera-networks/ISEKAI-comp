@@ -92,12 +92,11 @@ impl FlightCtxBuilder {
             ca_cert_pem: self.ca_cert_pem,
             jwt: self.jwt,
             attestation_config: self.attestation_config,
-            clients: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct FlightCtx {
     pub(crate) server_url: String,
     pub(crate) use_tls: bool,
@@ -106,7 +105,6 @@ pub struct FlightCtx {
     pub(crate) ca_cert_pem: Option<Vec<u8>>,
     pub(crate) jwt: Option<String>,
     pub(crate) attestation_config: AttestationConfig,
-    pub(crate) clients: Arc<Mutex<VecDeque<FlightServiceClient<tonic::transport::Channel>>>>,
 }
 
 impl FlightCtx {
