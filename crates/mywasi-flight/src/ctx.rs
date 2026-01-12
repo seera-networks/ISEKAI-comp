@@ -1,10 +1,6 @@
 // SPDX-FileCopyrightText: 2025 SEERA Networks Corporation <info@seera-networks.com>
 // SPDX-License-Identifier: MIT
 
-use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
-
-use arrow_flight::flight_service_client::FlightServiceClient;
 use wasmtime::component::ResourceTable;
 use snpguest::report::AttestationConfig;
 
