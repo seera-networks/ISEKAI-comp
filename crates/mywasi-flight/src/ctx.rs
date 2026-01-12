@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2025 SEERA Networks Corporation <info@seera-networks.com>
 // SPDX-License-Identifier: MIT
 
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
+
+use arrow_flight::flight_service_client::FlightServiceClient;
 use wasmtime::component::ResourceTable;
 use snpguest::report::AttestationConfig;
 
@@ -88,6 +92,7 @@ impl FlightCtxBuilder {
             ca_cert_pem: self.ca_cert_pem,
             jwt: self.jwt,
             attestation_config: self.attestation_config,
+            clients: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 }
@@ -101,6 +106,7 @@ pub struct FlightCtx {
     pub(crate) ca_cert_pem: Option<Vec<u8>>,
     pub(crate) jwt: Option<String>,
     pub(crate) attestation_config: AttestationConfig,
+    pub(crate) clients: Arc<Mutex<VecDeque<FlightServiceClient<tonic::transport::Channel>>>>,
 }
 
 impl FlightCtx {

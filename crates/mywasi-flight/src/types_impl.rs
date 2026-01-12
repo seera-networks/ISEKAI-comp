@@ -60,6 +60,7 @@ where
         let client_cert_pem = self.ctx().client_cert_pem.clone();
         let client_key_pem = self.ctx().client_key_pem.clone();
         let ca_cert_pem = self.ctx().ca_cert_pem.clone();
+        eprintln!("clients: {:?}", self.ctx().clients.lock().unwrap());
         let client = self.table().get_mut(&id)?;
         match &client.state {
             FlightClientState::Default => {}
@@ -111,6 +112,7 @@ where
     }
 
     fn finish_connect(&mut self, id: Resource<HostFlightClient>) -> FlightResult<()> {
+        let clients = self.ctx().clients.clone();
         let client = self.table().get_mut(&id)?;
         let previous_state = std::mem::replace(&mut client.state, FlightClientState::Closed);
         let res = match previous_state {
@@ -132,7 +134,9 @@ where
         };
         match res {
             Ok(Ok(channel)) => {
-                client.state = FlightClientState::Connected(FlightServiceClient::new(channel));
+                let flight_client = FlightServiceClient::new(channel);
+                clients.lock().unwrap().push_back(flight_client.clone());
+                client.state = FlightClientState::Connected(flight_client);
                 Ok(())
             }
             Ok(Err(err)) => {
