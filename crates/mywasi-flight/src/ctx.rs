@@ -92,7 +92,7 @@ impl FlightCtxBuilder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct FlightCtx {
     pub(crate) server_url: String,
     pub(crate) use_tls: bool,

@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 //! Implementation for the `flight/types` interface.
+
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::{Arc, LazyLock, Mutex};
+
 use crate::bindings::flight::types::ErrorCode;
+use crate::ctx::FlightCtx;
 pub use crate::ctx::{FlightImpl, FlightView};
 use crate::error::{FlightError, FlightResult};
 use crate::types::{
@@ -23,7 +29,8 @@ use wasmtime::component::*;
 use wasmtime_wasi::p2::{subscribe, DynPollable};
 use wasmtime_wasi::{async_trait, runtime::with_ambient_tokio_runtime};
 
-use std::str::FromStr;
+static LAZY_SHARED_CLIENTS: LazyLock<Arc<Mutex<HashMap<FlightCtx, FlightServiceClient<Channel>>>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 #[async_trait]
 impl<T> crate::bindings::flight::client::Host for FlightImpl<T>
@@ -55,11 +62,8 @@ where
     T: FlightView,
 {
     fn start_connect(&mut self, id: Resource<HostFlightClient>) -> FlightResult<()> {
-        let server_url = self.ctx().server_url.clone();
-        let use_tls = self.ctx().use_tls;
-        let client_cert_pem = self.ctx().client_cert_pem.clone();
-        let client_key_pem = self.ctx().client_key_pem.clone();
-        let ca_cert_pem = self.ctx().ca_cert_pem.clone();
+        let shared_clients = LAZY_SHARED_CLIENTS.clone();
+        let ctx = self.ctx().clone();
         let client = self.table().get_mut(&id)?;
         match &client.state {
             FlightClientState::Default => {}
@@ -67,8 +71,21 @@ where
                 return Err(ErrorCode::AlreadyConnected.into());
             }
         }
-        let (tx, rx) = oneshot::channel::<anyhow::Result<Channel>>();
-
+        let (tx, rx) = oneshot::channel();
+        if let Some(flight_client) = shared_clients.lock().unwrap().get(&ctx) {
+            with_ambient_tokio_runtime(|| {
+                let flight_client = flight_client.clone();
+                let _ = tx.send(Ok(flight_client));
+            });
+            client.state = FlightClientState::Connecting(rx);
+            return Ok(());
+        }
+        
+        let server_url = ctx.server_url.clone();
+        let use_tls = ctx.use_tls;
+        let client_cert_pem = ctx.client_cert_pem.clone();
+        let client_key_pem = ctx.client_key_pem.clone();
+        let ca_cert_pem = ctx.ca_cert_pem.clone();
         with_ambient_tokio_runtime(|| {
             tokio::spawn(async move {
                 let endpoint = Channel::builder(server_url.parse().unwrap());
@@ -80,14 +97,14 @@ where
                     };
                     let tls_config = match (client_cert_pem, client_key_pem) {
                         (Some(cert_pem), Some(key_pem)) => {
-                            let identity =
-                                tonic::transport::Identity::from_pem(cert_pem, key_pem);
+                            let identity = tonic::transport::Identity::from_pem(cert_pem, key_pem);
                             tls_config.identity(identity)
                         }
                         (Some(_), None) | (None, Some(_)) => {
                             let _ = tx.send(Err(tonic::Status::internal(
                                 "both client cert and key must be provided".to_string(),
-                            ).into()));
+                            )
+                            .into()));
                             return;
                         }
                         _ => tls_config,
@@ -102,8 +119,19 @@ where
                 } else {
                     endpoint
                 };
-                let res = endpoint.connect().await;
-                let _ = tx.send(res.map_err(|e| e.into()));
+                match endpoint.connect().await {
+                    Ok(channel) => {
+                        let flight_client = FlightServiceClient::new(channel);
+                        shared_clients
+                            .lock()
+                            .unwrap()
+                            .insert(ctx, flight_client.clone());
+                        let _ = tx.send(Ok(flight_client));
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(e.into()));
+                    }
+                }
             })
         });
         client.state = FlightClientState::Connecting(rx);
@@ -131,8 +159,8 @@ where
             }
         };
         match res {
-            Ok(Ok(channel)) => {
-                client.state = FlightClientState::Connected(FlightServiceClient::new(channel));
+            Ok(Ok(flight_client)) => {
+                client.state = FlightClientState::Connected(flight_client);
                 Ok(())
             }
             Ok(Err(err)) => {
