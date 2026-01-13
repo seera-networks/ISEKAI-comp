@@ -4,6 +4,7 @@
 - [QuickStart](#quickstart)
 - [ISEKAIデータサーバー](#isekaiデータサーバー)
 - [ISEKAIデータ提供モジュール](#isekaiデータ提供モジュール)
+- [ISEKAI計算モジュール](#isekai計算モジュール)
 
 
 # 概要
@@ -20,3 +21,7 @@ NAT下のクライアント端末でも動かすことができます。
 # ISEKAIデータ提供モジュール
 - [ISEKAIデータ提供モジュール](mods/mod-http-data-flight)は、ISEKAI計算上で動作し、
 ISEKAIデータサーバに接続してデータを取得するモジュールです。
+
+# ISEKAI計算モジュール
+- ISEKAI計算モジュールは、ISEKAI計算上で動作し、平均等の各種計算処理を実行するモジュールです。
+- 現時点では公開しておりません。
