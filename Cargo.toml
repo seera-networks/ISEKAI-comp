@@ -29,7 +29,7 @@ isekai-utils = { path = "./crates/isekai-utils" }
 isekai-utils-mod-http = { path = "./crates/isekai-utils-mod-http" }
 jsonwebtoken = "9.3.0"
 jwks = "0.4.0"
-parquet = { git = "https://github.com/seera-networks/arrow-rs.git", branch = "yakiniku" }
+parquet = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "189c7105472c6ecf01d2493b2a68fc5fa8c1d931" }
 prost = { version = "0.13.1", default-features = false }
 rand = "0.8.4"
 regex = "1.11.1"
