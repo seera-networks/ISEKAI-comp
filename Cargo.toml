@@ -12,10 +12,10 @@ members = [
 [workspace.dependencies]
 anyhow = "1.0.81"
 argh = "0.1.10"
-arrow = { git = "https://github.com/seera-networks/arrow-rs.git", branch = "yakiniku", default-features = false, features = ["ipc"] }
-arrow-array = { git = "https://github.com/seera-networks/arrow-rs.git", branch = "yakiniku" }
-arrow-flight = { git = "https://github.com/seera-networks/arrow-rs.git", branch = "yakiniku", default-features = false }
-arrow-schema = { git = "https://github.com/seera-networks/arrow-rs.git", branch = "yakiniku" }
+arrow = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "189c7105472c6ecf01d2493b2a68fc5fa8c1d931", default-features = false, features = ["ipc"] }
+arrow-array = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "189c7105472c6ecf01d2493b2a68fc5fa8c1d931" }
+arrow-flight = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "189c7105472c6ecf01d2493b2a68fc5fa8c1d931", default-features = false }
+arrow-schema = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "189c7105472c6ecf01d2493b2a68fc5fa8c1d931" }
 async-stream = "0.3.5"
 base64 = "0.22.1"
 bincode = "^1.2.1"
