@@ -12,10 +12,10 @@ members = [
 [workspace.dependencies]
 anyhow = "1.0.81"
 argh = "0.1.10"
-arrow = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "189c7105472c6ecf01d2493b2a68fc5fa8c1d931", default-features = false, features = ["ipc"] }
-arrow-array = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "189c7105472c6ecf01d2493b2a68fc5fa8c1d931" }
-arrow-flight = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "189c7105472c6ecf01d2493b2a68fc5fa8c1d931", default-features = false }
-arrow-schema = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "189c7105472c6ecf01d2493b2a68fc5fa8c1d931" }
+arrow = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "3cf3103f3bc1fe80e9676689a606c762b348a5b2", default-features = false, features = ["ipc"] }
+arrow-array = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "3cf3103f3bc1fe80e9676689a606c762b348a5b2" }
+arrow-flight = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "3cf3103f3bc1fe80e9676689a606c762b348a5b2", default-features = false }
+arrow-schema = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "3cf3103f3bc1fe80e9676689a606c762b348a5b2" }
 async-stream = "0.3.5"
 base64 = "0.22.1"
 bincode = "^1.2.1"
@@ -29,8 +29,8 @@ isekai-utils = { path = "./crates/isekai-utils" }
 isekai-utils-mod-http = { path = "./crates/isekai-utils-mod-http" }
 jsonwebtoken = "9.3.0"
 jwks = "0.4.0"
-parquet = { git = "https://github.com/seera-networks/arrow-rs.git", branch = "yakiniku" }
-prost = { version = "0.13.1", default-features = false }
+parquet = { git = "https://github.com/seera-networks/arrow-rs.git", rev = "3cf3103f3bc1fe80e9676689a606c762b348a5b2" }
+prost = { version = "0.14.3", default-features = false }
 rand = "0.8.4"
 regex = "1.11.1"
 reqwest = { version = "0.12.19", features = ["json", "rustls-tls"], default-features = false }
@@ -43,8 +43,8 @@ tempdir = "0.3.7"
 tempfile = "3.13.0"
 tokio = "1.41.0"
 tokio-stream = { version = "0.1", features = ["full"] }
-tonic = { version = "0.12.3", features = ["tls", "channel"] }
-tonic-web = { version = "0.12.3" }
+tonic = { version = "0.14.3", features = ["tls-aws-lc", "channel"] }
+tonic-web = { version = "0.14.3" }
 tower-http = { version = "0.6.2", default-features = false, features = ["cors"] }
 wasi = "0.14.0"
 wasmtime = "38.0.3"
