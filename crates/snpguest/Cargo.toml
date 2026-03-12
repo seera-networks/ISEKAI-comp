@@ -26,7 +26,7 @@ sev = { version = "4.0", default-features = false, features = ['openssl','snp']}
 nix = "^0.23"
 serde = { version = "1.0", features = ["derive"] }
 bincode = {workspace = true}
-openssl = { version = "^0.10", features = ["vendored"]}
+openssl = { version = "^0.10", features = [] }
 reqwest = { workspace = true, features = ["blocking"] }
 hex = "0.4"
 x509-parser = { version="^0.14", features=["verify"] }
@@ -37,7 +37,7 @@ colorful = "0.2.2"
 bitfield = "0.13.2"
 clap-num = "1.1.1"
 base64 = "0.22.1"
-tokio = "1.41.0"
+tokio = { version = "1.41.0", features = ["full"] }
 tempfile = {workspace = true}
 
 [target.'cfg(target_os = "linux")'.dependencies]

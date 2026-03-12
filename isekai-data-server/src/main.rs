@@ -1,40 +1,59 @@
 // SPDX-FileCopyrightText: 2025 SEERA Networks Corporation <info@seera-networks.com>
 // SPDX-License-Identifier: MIT
 
-use base64::Engine;
 use anyhow::anyhow;
+use base64::Engine;
 use futures::stream::BoxStream;
 use futures::{StreamExt, TryStreamExt};
-use http::header::HeaderName;
-use jsonwebtoken::{decode, decode_header, Algorithm, TokenData, Validation};
+use jsonwebtoken::{Algorithm, TokenData, Validation, decode, decode_header};
 use jwks::Jwks;
 use serde::{Deserialize, Serialize};
-use tonic::transport::Server;
+
 use tonic::{Request, Response, Status, Streaming};
-use tonic_web::GrpcWebLayer;
-use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use arrow_flight::decode::{DecodedPayload, FlightDataDecoder};
 use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::error::FlightError;
 use arrow_flight::{
-    flight_service_server::FlightService, flight_service_server::FlightServiceServer, Action,
-    ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo, HandshakeRequest,
-    HandshakeResponse, PollInfo, PutResult, SchemaResult, Ticket,
+    Action, ActionType, Criteria, Empty, FlightData, FlightDescriptor, FlightInfo,
+    HandshakeRequest, HandshakeResponse, PollInfo, PutResult, SchemaResult, Ticket,
+    flight_service_server::FlightService, flight_service_server::FlightServiceServer,
 };
 
 use isekai_utils::module::GetTicket;
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
+#[cfg(not(feature = "tonic-h3"))]
+use std::time::Duration;
+#[cfg(not(feature = "tonic-h3"))]
+use http::header::HeaderName;
+#[cfg(not(feature = "tonic-h3"))]
+use tonic::transport::Server;
+#[cfg(not(feature = "tonic-h3"))]
+use tonic_web::GrpcWebLayer;
+#[cfg(not(feature = "tonic-h3"))]
+use tower_http::cors::{AllowOrigin, CorsLayer};
+
+
+#[cfg(not(feature = "tonic-h3"))]
 const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+#[cfg(not(feature = "tonic-h3"))]
 const DEFAULT_EXPOSED_HEADERS: [&str; 3] =
     ["grpc-status", "grpc-message", "grpc-status-details-bin"];
+#[cfg(not(feature = "tonic-h3"))]
 const DEFAULT_ALLOW_HEADERS: [&str; 4] =
     ["x-grpc-web", "content-type", "x-user-agent", "grpc-timeout"];
+
+#[cfg(feature = "tonic-h3")]
+use std::net::SocketAddr;
+#[cfg(feature = "tonic-h3")]
+use tokio_util::sync::CancellationToken;
+#[cfg(feature = "tonic-h3")]
+use tonic_h3::msquic_async::h3_msquic_async::{msquic, msquic_async};
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -473,6 +492,7 @@ use argh::FromArgs;
 /// grpc-server args
 pub struct CmdOptions {
     /// enable mTLS
+    #[cfg(not(feature = "tonic-h3"))]
     #[argh(switch)]
     no_tls: bool,
     /// authorized subject
@@ -511,6 +531,103 @@ pub struct CmdOptions {
     server_ld: Option<String>,
 }
 
+#[cfg(feature = "tonic-h3")]
+fn make_msquic_async_listner(
+    addr: Option<SocketAddr>,
+    cert_path: &str,
+    key_path: &str,
+) -> anyhow::Result<(Arc<msquic::Registration>, msquic_async::Listener)> {
+    let registration = msquic::Registration::new(&msquic::RegistrationConfig::default())?;
+    let alpn = [msquic::BufferRef::from("h3")];
+    let configuration = msquic::Configuration::open(
+        &registration,
+        &alpn,
+        Some(
+            &msquic::Settings::new()
+                .set_IdleTimeoutMs(10000)
+                .set_PeerBidiStreamCount(100)
+                .set_PeerUnidiStreamCount(100)
+                .set_DatagramReceiveEnabled()
+                .set_StreamMultiReceiveEnabled()
+                .set_ServerMigrationEnabled(),
+        ),
+    )?;
+
+    #[cfg(not(windows))]
+    {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+        let cert_path = cert_path.to_owned();
+        let key_path = key_path.to_owned();
+
+        let ca_cert = include_bytes!("../../certs/yakCA.crt");
+        let mut ca_cert_file = NamedTempFile::new()?;
+        ca_cert_file.write_all(ca_cert)?;
+        let ca_cert_path = ca_cert_file.into_temp_path();
+        let ca_cert_path = ca_cert_path.to_string_lossy().into_owned();
+
+        let cred_config = msquic::CredentialConfig::new()
+            .set_credential_flags(msquic::CredentialFlags::REQUIRE_CLIENT_AUTHENTICATION)
+            .set_credential(msquic::Credential::CertificateFile(
+                msquic::CertificateFile::new(key_path, cert_path),
+            ))
+            .set_ca_certificate_file(ca_cert_path);
+
+        configuration.load_credential(&cred_config)?;
+    }
+
+    #[cfg(windows)]
+    {
+        use schannel::RawPointer;
+        use schannel::cert_context::{CertContext, KeySpec};
+        use schannel::cert_store::{CertAdd, Memory};
+        use schannel::crypt_prov::{AcquireOptions, ProviderType};
+
+        let cert = std::fs::read(cert_path)?;
+        let key = std::fs::read(key_path)?;
+
+        let mut store = Memory::new().unwrap().into_store();
+
+        let name = String::from("isekai-data-server");
+
+        let cert_ctx = CertContext::from_pem(cert).unwrap();
+
+        let mut options = AcquireOptions::new();
+        options.container(&name);
+
+        let type_ = ProviderType::rsa_full();
+
+        let mut container = match options.acquire(type_) {
+            Ok(container) => container,
+            Err(_) => options.new_keyset(true).acquire(type_).unwrap(),
+        };
+        container.import().import_pkcs8_pem(key).unwrap();
+
+        cert_ctx
+            .set_key_prov_info()
+            .container(&name)
+            .type_(type_)
+            .keep_open(true)
+            .key_spec(KeySpec::key_exchange())
+            .set()
+            .unwrap();
+
+        let context = store.add_cert(&cert_ctx, CertAdd::Always).unwrap();
+
+        let cred_config = msquic::CredentialConfig::new()
+            .set_credential_flags(msquic::CredentialFlags::REQUIRE_CLIENT_AUTHENTICATION)
+            .set_credential(msquic::Credential::CertificateContext(unsafe {
+                context.as_ptr()
+            }));
+
+        configuration.load_credential(&cred_config)?;
+    }
+
+    let listner = msquic_async::Listener::new(&registration, configuration)?;
+    listner.start(&alpn, addr)?;
+    Ok((Arc::new(registration), listner))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cmd_opts: CmdOptions = argh::from_env();
@@ -522,9 +639,12 @@ async fn main() -> anyhow::Result<()> {
 
     let server_ld = if let Some(server_ld) = &cmd_opts.server_ld {
         let base64_engine = base64::engine::general_purpose::STANDARD;
-        let res =base64_engine.decode(server_ld.as_bytes())?;
+        let res = base64_engine.decode(server_ld.as_bytes())?;
         if res.len() != 48 {
-            return Err(anyhow!("server_ld must be 48 bytes when decoded, but got {}", res.len()));
+            return Err(anyhow!(
+                "server_ld must be 48 bytes when decoded, but got {}",
+                res.len()
+            ));
         }
         Some(res[0..48].try_into().unwrap())
     } else {
@@ -539,50 +659,79 @@ async fn main() -> anyhow::Result<()> {
 
     let svc = FlightServiceServer::new(service);
 
-    let server = if cmd_opts.no_tls {
-        Server::builder()
-    } else {
-        println!("TLS enabled");
-        // Load server's identity (certificate and private key)
-        let cert = std::fs::read(&cmd_opts.cert)?;
-        let key = std::fs::read(&cmd_opts.key)?;
-        let server_identity = tonic::transport::Identity::from_pem(cert, key);
-        let client_ca_cert =
-            tonic::transport::Certificate::from_pem(include_bytes!("../../certs/yakCA.crt"));
+    #[cfg(not(feature = "tonic-h3"))]
+    {
+        let server = if cmd_opts.no_tls {
+            Server::builder()
+        } else {
+            println!("TLS enabled");
+            // Load server's identity (certificate and private key)
+            let cert = std::fs::read(&cmd_opts.cert)?;
+            let key = std::fs::read(&cmd_opts.key)?;
+            let server_identity = tonic::transport::Identity::from_pem(cert, key);
+            let client_ca_cert =
+                tonic::transport::Certificate::from_pem(include_bytes!("../../certs/yakCA.crt"));
 
-        let tls_config = tonic::transport::ServerTlsConfig::new()
-            .identity(server_identity)
-            .client_ca_root(client_ca_cert);
+            let tls_config = tonic::transport::ServerTlsConfig::new()
+                .identity(server_identity)
+                .client_ca_root(client_ca_cert);
 
-        Server::builder().tls_config(tls_config)?
-    };
+            Server::builder().tls_config(tls_config)?
+        };
 
-    server
-        .accept_http1(true)
-        .layer(
-            CorsLayer::new()
-                .allow_origin(AllowOrigin::mirror_request())
-                .allow_credentials(true)
-                .max_age(DEFAULT_MAX_AGE)
-                .expose_headers(
-                    DEFAULT_EXPOSED_HEADERS
-                        .iter()
-                        .cloned()
-                        .map(HeaderName::from_static)
-                        .collect::<Vec<HeaderName>>(),
-                )
-                .allow_headers(
-                    DEFAULT_ALLOW_HEADERS
-                        .iter()
-                        .cloned()
-                        .map(HeaderName::from_static)
-                        .collect::<Vec<HeaderName>>(),
-                ),
-        )
-        .layer(GrpcWebLayer::new())
-        .add_service(svc)
-        .serve(addr)
-        .await?;
+        server
+            .accept_http1(true)
+            .layer(
+                CorsLayer::new()
+                    .allow_origin(AllowOrigin::mirror_request())
+                    .allow_credentials(true)
+                    .max_age(DEFAULT_MAX_AGE)
+                    .expose_headers(
+                        DEFAULT_EXPOSED_HEADERS
+                            .iter()
+                            .cloned()
+                            .map(HeaderName::from_static)
+                            .collect::<Vec<HeaderName>>(),
+                    )
+                    .allow_headers(
+                        DEFAULT_ALLOW_HEADERS
+                            .iter()
+                            .cloned()
+                            .map(HeaderName::from_static)
+                            .collect::<Vec<HeaderName>>(),
+                    ),
+            )
+            .layer(GrpcWebLayer::new())
+            .add_service(svc)
+            .serve(addr)
+            .await?;
+    }
 
+    #[cfg(feature = "tonic-h3")]
+    {
+        let (_registration, listener) =
+            make_msquic_async_listner(Some(addr), &cmd_opts.cert, &cmd_opts.key)?;
+
+        let acceptor = tonic_h3::msquic_async::H3MsQuicAsyncAcceptor::new(listener);
+        let router = tonic::service::Routes::builder()
+            .add_service(svc)
+            .clone()
+            .routes();
+        // run server in background
+        let token = CancellationToken::new();
+        let handle_svc = {
+            let token = token.clone();
+            tokio::spawn(async move {
+                tonic_h3::server::H3Router::new(router)
+                    .serve_with_shutdown(acceptor, async move { token.cancelled().await })
+                    .await
+            })
+        };
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to listen for ctrl_c signal");
+        token.cancel();
+        let _ = handle_svc.await?;
+    }
     Ok(())
 }
