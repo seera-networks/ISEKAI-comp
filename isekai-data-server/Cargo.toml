@@ -21,7 +21,6 @@ bytes = { workspace = true }
 chrono = { workspace = true }
 csv = { workspace = true }
 futures = { workspace = true }
-tonic-h3 =  { workspace = true, features = ["msquic-async"], optional = true }
 http = { workspace = true }
 isekai-utils = { workspace = true }
 jsonwebtoken = { workspace = true }
@@ -40,5 +39,6 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tonic = { workspace = true }
+tonic-h3 =  { workspace = true, features = ["msquic-async"], optional = true }
 tonic-web = { workspace = true }
 tower-http = { workspace = true }
