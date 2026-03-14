@@ -24,6 +24,7 @@ chrono = "0.4.38"
 csv = "1.2.2"
 futures = { version = "0.3", default-features = false }
 http = "1"
+http-body = "1.0.0"
 image = { version = "0.25.2", default-features = false, features = ["jpeg", "bmp", "png"] }
 isekai-utils = { path = "./crates/isekai-utils" }
 isekai-utils-mod-http = { path = "./crates/isekai-utils-mod-http" }

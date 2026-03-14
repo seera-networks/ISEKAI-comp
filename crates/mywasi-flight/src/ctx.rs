@@ -12,6 +12,8 @@ use snpguest::report::AttestationConfig;
 pub struct FlightCtxBuilder {
     server_url: String,
     use_tls: bool,
+    #[cfg(feature = "tonic-h3")]
+    use_h3: bool,
     client_cert_pem: Option<Vec<u8>>,
     client_key_pem: Option<Vec<u8>>,
     ca_cert_pem: Option<Vec<u8>>,
@@ -25,6 +27,8 @@ impl FlightCtxBuilder {
         Self {
             server_url: "http://localhost:50053".to_string(),
             use_tls: false,
+            #[cfg(feature = "tonic-h3")]
+            use_h3: false,
             client_cert_pem: None,
             client_key_pem: None,
             ca_cert_pem: None,
@@ -45,6 +49,13 @@ impl FlightCtxBuilder {
     /// Sets whether to use TLS.
     pub fn use_tls(mut self, on: bool) -> Self {
         self.use_tls = on;
+        self
+    }
+
+    /// Sets whether to use HTTP/3.
+    #[cfg(feature = "tonic-h3")]
+    pub fn use_h3(mut self, on: bool) -> Self {
+        self.use_h3 = on;
         self
     }
 
@@ -83,6 +94,8 @@ impl FlightCtxBuilder {
         FlightCtx {
             server_url: self.server_url,
             use_tls: self.use_tls,
+            #[cfg(feature = "tonic-h3")]
+            use_h3: self.use_h3,
             client_key_pem: self.client_key_pem,
             client_cert_pem: self.client_cert_pem,
             ca_cert_pem: self.ca_cert_pem,
@@ -96,6 +109,8 @@ impl FlightCtxBuilder {
 pub struct FlightCtx {
     pub(crate) server_url: String,
     pub(crate) use_tls: bool,
+    #[cfg(feature = "tonic-h3")]
+    pub(crate) use_h3: bool,
     pub(crate) client_cert_pem: Option<Vec<u8>>,
     pub(crate) client_key_pem: Option<Vec<u8>>,
     pub(crate) ca_cert_pem: Option<Vec<u8>>,

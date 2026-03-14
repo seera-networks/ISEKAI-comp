@@ -3,6 +3,10 @@ name = "wasmtime-mywasi-flight"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["tonic-h3"]
+tonic-h3 = ["dep:tonic-h3"]
+
 [dependencies]
 anyhow = { workspace = true }
 arrow = { workspace = true }
@@ -11,9 +15,13 @@ async-stream = { workspace = true }
 bincode = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true, features = ["alloc"] }
+http = { workspace = true }
+http-body = { workspace = true }
 snpguest = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
-tonic = { workspace = true, features = ["tls-webpki-roots"] }
+tonic = { workspace = true, features = ["codegen", "tls-webpki-roots"] }
+tonic-h3 =  { workspace = true, features = ["msquic-async"], optional = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
