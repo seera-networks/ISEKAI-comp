@@ -525,7 +525,7 @@ fn make_msquic_async_listner(
         &alpn,
         Some(
             &msquic::Settings::new()
-                .set_IdleTimeoutMs(10000)
+                .set_IdleTimeoutMs(100_000)
                 .set_PeerBidiStreamCount(100)
                 .set_PeerUnidiStreamCount(100)
                 .set_DatagramReceiveEnabled()
