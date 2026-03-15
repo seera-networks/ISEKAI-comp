@@ -619,7 +619,7 @@ async fn main() -> anyhow::Result<()> {
 
     let cmd_opts: CmdOptions = argh::from_env();
 
-    let addr = format!("0.0.0.0:{}", cmd_opts.port).parse()?;
+    let addr = format!("[::]:{}", cmd_opts.port).parse()?;
 
     let jwks_url = "https://seera-networks.jp.auth0.com/.well-known/jwks.json";
     let jwks = Jwks::from_jwks_url(jwks_url).await?;
