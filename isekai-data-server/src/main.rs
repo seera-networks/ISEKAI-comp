@@ -2,15 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 use anyhow::anyhow;
-use base64::Engine;
-use futures::stream::BoxStream;
-use futures::{StreamExt, TryStreamExt};
-use jsonwebtoken::{Algorithm, TokenData, Validation, decode, decode_header};
-use jwks::Jwks;
-use serde::{Deserialize, Serialize};
-
-use tonic::{Request, Response, Status, Streaming};
-
 use arrow_flight::decode::{DecodedPayload, FlightDataDecoder};
 use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::error::FlightError;
@@ -19,41 +10,25 @@ use arrow_flight::{
     HandshakeRequest, HandshakeResponse, PollInfo, PutResult, SchemaResult, Ticket,
     flight_service_server::FlightService, flight_service_server::FlightServiceServer,
 };
-
+use base64::Engine;
+use futures::stream::BoxStream;
+use futures::{StreamExt, TryStreamExt};
 use isekai_utils::module::GetTicket;
+use jsonwebtoken::{Algorithm, TokenData, Validation, decode, decode_header};
+use jwks::Jwks;
 use rand::RngCore;
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::sync::{Arc, Mutex};
-
-#[cfg(not(feature = "tonic-h3"))]
-use std::time::Duration;
-#[cfg(not(feature = "tonic-h3"))]
-use http::header::HeaderName;
-#[cfg(not(feature = "tonic-h3"))]
-use tonic::transport::Server;
-#[cfg(not(feature = "tonic-h3"))]
-use tonic_web::GrpcWebLayer;
-#[cfg(not(feature = "tonic-h3"))]
-use tower_http::cors::{AllowOrigin, CorsLayer};
-
-
-#[cfg(not(feature = "tonic-h3"))]
-const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
-#[cfg(not(feature = "tonic-h3"))]
-const DEFAULT_EXPOSED_HEADERS: [&str; 3] =
-    ["grpc-status", "grpc-message", "grpc-status-details-bin"];
-#[cfg(not(feature = "tonic-h3"))]
-const DEFAULT_ALLOW_HEADERS: [&str; 4] =
-    ["x-grpc-web", "content-type", "x-user-agent", "grpc-timeout"];
-
 #[cfg(feature = "tonic-h3")]
 use std::net::SocketAddr;
-#[cfg(feature = "tonic-h3")]
+use std::sync::{Arc, Mutex};
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
+use tonic::transport::Server;
+use tonic::{Request, Response, Status, Streaming};
 #[cfg(feature = "tonic-h3")]
 use tonic_h3::msquic_async::h3_msquic_async::{msquic, msquic_async};
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -491,10 +466,16 @@ use argh::FromArgs;
 #[derive(FromArgs, Clone)]
 /// grpc-server args
 pub struct CmdOptions {
-    /// enable mTLS
-    #[cfg(not(feature = "tonic-h3"))]
+    /// use h2
     #[argh(switch)]
-    no_tls: bool,
+    use_h2: bool,
+    /// use h3
+    #[cfg(feature = "tonic-h3")]
+    #[argh(switch)]
+    use_h3: bool,
+    /// disable TLS
+    #[argh(switch)]
+    h2_no_tls: bool,
     /// authorized subject
     #[argh(option)]
     authorized_subject: Option<String>,
@@ -630,6 +611,12 @@ fn make_msquic_async_listner(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
+        .with_writer(std::io::stderr)
+        .init();
+
     let cmd_opts: CmdOptions = argh::from_env();
 
     let addr = format!("0.0.0.0:{}", cmd_opts.port).parse()?;
@@ -650,88 +637,98 @@ async fn main() -> anyhow::Result<()> {
     } else {
         None
     };
-    let service = FlightServiceImpl {
-        cmd_opts: cmd_opts.clone(),
-        jwks,
-        valid_tokens: Arc::new(Mutex::new(Vec::new())),
-        server_ld: server_ld,
-    };
 
-    let svc = FlightServiceServer::new(service);
+    let mut join_set = JoinSet::new();
+    let token = CancellationToken::new();
 
-    #[cfg(not(feature = "tonic-h3"))]
-    {
-        let server = if cmd_opts.no_tls {
-            Server::builder()
-        } else {
-            println!("TLS enabled");
-            // Load server's identity (certificate and private key)
-            let cert = std::fs::read(&cmd_opts.cert)?;
-            let key = std::fs::read(&cmd_opts.key)?;
-            let server_identity = tonic::transport::Identity::from_pem(cert, key);
-            let client_ca_cert =
-                tonic::transport::Certificate::from_pem(include_bytes!("../../certs/yakCA.crt"));
+    if cmd_opts.use_h2 {
+        let cmd_opts = cmd_opts.clone();
+        let jwks = jwks.clone();
+        let server_ld = server_ld.clone();
+        let token = token.clone();
+        join_set.spawn(async move {
+            println!("Starting gRPC server with h2");
 
-            let tls_config = tonic::transport::ServerTlsConfig::new()
-                .identity(server_identity)
-                .client_ca_root(client_ca_cert);
+            let mut server = if cmd_opts.h2_no_tls {
+                Server::builder()
+            } else {
+                println!("TLS enabled");
+                // Load server's identity (certificate and private key)
+                let cert = std::fs::read(&cmd_opts.cert)?;
+                let key = std::fs::read(&cmd_opts.key)?;
+                let server_identity = tonic::transport::Identity::from_pem(cert, key);
+                let client_ca_cert = tonic::transport::Certificate::from_pem(include_bytes!(
+                    "../../certs/yakCA.crt"
+                ));
 
-            Server::builder().tls_config(tls_config)?
-        };
+                let tls_config = tonic::transport::ServerTlsConfig::new()
+                    .identity(server_identity)
+                    .client_ca_root(client_ca_cert);
 
-        server
-            .accept_http1(true)
-            .layer(
-                CorsLayer::new()
-                    .allow_origin(AllowOrigin::mirror_request())
-                    .allow_credentials(true)
-                    .max_age(DEFAULT_MAX_AGE)
-                    .expose_headers(
-                        DEFAULT_EXPOSED_HEADERS
-                            .iter()
-                            .cloned()
-                            .map(HeaderName::from_static)
-                            .collect::<Vec<HeaderName>>(),
-                    )
-                    .allow_headers(
-                        DEFAULT_ALLOW_HEADERS
-                            .iter()
-                            .cloned()
-                            .map(HeaderName::from_static)
-                            .collect::<Vec<HeaderName>>(),
-                    ),
-            )
-            .layer(GrpcWebLayer::new())
-            .add_service(svc)
-            .serve(addr)
-            .await?;
+                Server::builder().tls_config(tls_config)?
+            };
+
+            let service = FlightServiceImpl {
+                cmd_opts,
+                jwks,
+                valid_tokens: Arc::new(Mutex::new(Vec::new())),
+                server_ld,
+            };
+
+            let svc = FlightServiceServer::new(service);
+
+            server
+                .add_service(svc)
+                .serve_with_shutdown(addr, async move { token.cancelled().await })
+                .await?;
+            anyhow::Ok(())
+        });
     }
 
     #[cfg(feature = "tonic-h3")]
-    {
-        let (_registration, listener) =
-            make_msquic_async_listner(Some(addr), &cmd_opts.cert, &cmd_opts.key)?;
+    if cmd_opts.use_h3 {
+        let token = token.clone();
+        join_set.spawn(async move {
+            println!("Starting gRPC server with h3");
 
-        let acceptor = tonic_h3::msquic_async::H3MsQuicAsyncAcceptor::new(listener);
-        let router = tonic::service::Routes::builder()
-            .add_service(svc)
-            .clone()
-            .routes();
-        // run server in background
-        let token = CancellationToken::new();
-        let handle_svc = {
-            let token = token.clone();
-            tokio::spawn(async move {
-                tonic_h3::server::H3Router::new(router)
-                    .serve_with_shutdown(acceptor, async move { token.cancelled().await })
-                    .await
-            })
-        };
+            let (_registration, listener) =
+                make_msquic_async_listner(Some(addr), &cmd_opts.cert, &cmd_opts.key)?;
+            let acceptor = tonic_h3::msquic_async::H3MsQuicAsyncAcceptor::new(listener);
+
+            let service = FlightServiceImpl {
+                cmd_opts,
+                jwks,
+                valid_tokens: Arc::new(Mutex::new(Vec::new())),
+                server_ld,
+            };
+
+            let svc = FlightServiceServer::new(service);
+
+            let router = tonic::service::Routes::builder()
+                .add_service(svc)
+                .clone()
+                .routes();
+            let _ = tonic_h3::server::H3Router::new(router)
+                .serve_with_shutdown(acceptor, async move { token.cancelled().await })
+                .await;
+            anyhow::Ok(())
+        });
+    }
+
+    if join_set.is_empty() {
+        println!("No server is configured to start. Please check the command line options.");
+        return Ok(());
+    }
+    join_set.spawn(async move {
+        println!("Press Ctrl+C to stop the server...");
         tokio::signal::ctrl_c()
             .await
-            .expect("failed to listen for ctrl_c signal");
+            .expect("Failed to listen for Ctrl+C");
+        println!("Shutting down...");
         token.cancel();
-        let _ = handle_svc.await?;
-    }
+        anyhow::Ok(())
+    });
+
+    join_set.join_all().await;
     Ok(())
 }
