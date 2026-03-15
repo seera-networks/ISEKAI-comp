@@ -8,6 +8,7 @@ use anyhow::Result;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::{FlightData, PutResult};
 use futures::StreamExt;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
@@ -15,7 +16,9 @@ use tonic::codec::Streaming;
 use tonic::transport::Channel;
 use tonic::Response;
 #[cfg(feature = "tonic-h3")]
-use tonic_h3::{msquic_async::H3MsQuicAsyncConnector, H3Channel};
+use tonic_h3::{
+    msquic_async::h3_msquic_async::msquic, msquic_async::H3MsQuicAsyncConnector, H3Channel,
+};
 use wasmtime_wasi::async_trait;
 use wasmtime_wasi::p2::Pollable;
 
@@ -140,6 +143,8 @@ pub enum FlightClientState {
 pub struct HostFlightClient {
     pub state: FlightClientState,
     pub token: Option<String>,
+    #[cfg(feature = "tonic-h3")]
+    pub reg: Option<Arc<msquic::Registration>>,
 }
 
 #[async_trait]

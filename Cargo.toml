@@ -45,12 +45,12 @@ tempfile = "3.13.0"
 tokio = "1.41.0"
 tokio-util = "0.7"
 tokio-stream = { version = "0.1", features = ["full"] }
-tonic = { version = "0.14.3", features = ["tls-aws-lc", "channel"] }
-#tonic-h3 = { git = "https://github.com/masa-koz/tonic-h3", rev = "6cb9dc8cbd910be6599e0e3e426f64562422f3d5", default-features = false }
-tonic-h3 = { path = "../tonic-h3/tonic-h3", default-features = false }
-
+tonic = { version = "0.14.3", features = ["tls-ring", "channel"] }
+tonic-h3 = { path = "/root/tonic-h3/tonic-h3", default-features = false }
 tonic-web = { version = "0.14.3" }
 tower-http = { version = "0.6.2", default-features = false, features = ["cors"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3", features = ["fmt", "ansi", "env-filter", "time", "tracing-log"] }
 wasi = "0.14.0"
 wasmtime = "38.0.3"
 wasmtime-wasi = "38.0.3"

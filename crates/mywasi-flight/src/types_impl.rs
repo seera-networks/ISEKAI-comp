@@ -51,11 +51,13 @@ where
             HostFlightClient {
                 state: FlightClientState::H3(FlightClientStateH3::Default),
                 token: None,
+                reg: None,
             }
         } else {
             HostFlightClient {
                 state: FlightClientState::H2(FlightClientStateH2::Default),
                 token: None,
+                reg: None,
             }
         };
         #[cfg(not(feature = "tonic-h3"))]
@@ -261,7 +263,7 @@ fn make_msquic_reg_and_config(
         &alpn,
         Some(
             &msquic::Settings::new()
-                .set_IdleTimeoutMs(10000)
+                .set_IdleTimeoutMs(100000)
                 .set_PeerBidiStreamCount(100)
                 .set_PeerUnidiStreamCount(100)
                 .set_DatagramReceiveEnabled()
@@ -270,32 +272,39 @@ fn make_msquic_reg_and_config(
     )?;
 
     let cred_config = msquic::CredentialConfig::new_client();
-    let cred_config = if let Some((cert_pem, key_pem)) = client_pem {
+    let (cred_config, _key_path, _cert_path) = if let Some((cert_pem, key_pem)) = client_pem {
         let mut cert_file = NamedTempFile::new()?;
         cert_file.write_all(&cert_pem)?;
         let cert_path = cert_file.into_temp_path();
-        let cert_path = cert_path.to_string_lossy().into_owned();
+        let cert_path_str = cert_path.to_string_lossy().into_owned();
 
         let mut key_file = NamedTempFile::new()?;
         key_file.write_all(&key_pem)?;
         let key_path = key_file.into_temp_path();
-        let key_path = key_path.to_string_lossy().into_owned();
+        let key_path_str = key_path.to_string_lossy().into_owned();
 
-        cred_config.set_credential(msquic::Credential::CertificateFile(
-            msquic::CertificateFile::new(key_path, cert_path),
-        ))
+        (
+            cred_config.set_credential(msquic::Credential::CertificateFile(
+                msquic::CertificateFile::new(key_path_str, cert_path_str),
+            )),
+            Some(key_path),
+            Some(cert_path),
+        )
     } else {
-        cred_config
+        (cred_config, None, None)
     };
 
-    let cred_config = if let Some(ca_cert_pem) = ca_cert_pem {
+    let (cred_config, _ca_cert_path) = if let Some(ca_cert_pem) = ca_cert_pem {
         let mut ca_cert_file = NamedTempFile::new()?;
         ca_cert_file.write_all(&ca_cert_pem)?;
         let ca_cert_path = ca_cert_file.into_temp_path();
-        let ca_cert_path = ca_cert_path.to_string_lossy().into_owned();
-        cred_config.set_ca_certificate_file(ca_cert_path)
+        let ca_cert_path_str = ca_cert_path.to_string_lossy().into_owned();
+        (
+            cred_config.set_ca_certificate_file(ca_cert_path_str),
+            Some(ca_cert_path),
+        )
     } else {
-        cred_config
+        (cred_config, None)
     };
 
     configuration.load_credential(&cred_config)?;
@@ -390,54 +399,50 @@ where
                 let client_key_pem = ctx.client_key_pem.clone();
                 let ca_cert_pem = ctx.ca_cert_pem.clone();
 
-                with_ambient_tokio_runtime(move || {
-                    tokio::spawn(async move {
-                        let client_pem = match (client_cert_pem, client_key_pem) {
-                            (Some(cert_pem), Some(key_pem)) => Some((cert_pem, key_pem)),
-                            (Some(_), None) | (None, Some(_)) => {
-                                let _ = tx.send(Err(tonic::Status::internal(
-                                    "both client cert and key must be provided".to_string(),
-                                )
-                                .into()));
-                                return;
-                            }
-                            _ => None,
-                        };
-                        let (reg, config) =
-                            match make_msquic_reg_and_config(client_pem, ca_cert_pem) {
-                                Ok(res) => res,
-                                Err(e) => {
-                                    let _ = tx.send(Err(tonic::Status::internal(format!(
-                                        "failed to create msquic config: {:?}",
-                                        e
-                                    ))
-                                    .into()));
-                                    return;
-                                }
-                            };
-                        let uri: Uri = match server_url.parse() {
-                            Ok(uri) => uri,
-                            Err(e) => {
-                                let _ = tx.send(Err(tonic::Status::internal(format!(
-                                    "invalid server url: {:?}",
-                                    e
-                                ))
-                                .into()));
-                                return;
-                            }
-                        };
-                        let connector = H3MsQuicAsyncConnector::new(uri.clone(), config, reg);
-                        let channel = H3Channel::new(connector, uri.clone());
-                        let flight_client = FlightServiceClient::new(channel);
-                        let _ = tx.send(Ok(flight_client));
-                    })
+                with_ambient_tokio_runtime(|| {
+                    let client_pem = match (client_cert_pem, client_key_pem) {
+                        (Some(cert_pem), Some(key_pem)) => Some((cert_pem, key_pem)),
+                        (Some(_), None) | (None, Some(_)) => {
+                            let _ = tx.send(Err(tonic::Status::internal(
+                                "both client cert and key must be provided".to_string(),
+                            )
+                            .into()));
+                            return;
+                        }
+                        _ => None,
+                    };
+                    let (reg, config) = match make_msquic_reg_and_config(client_pem, ca_cert_pem) {
+                        Ok(res) => res,
+                        Err(e) => {
+                            let _ = tx.send(Err(tonic::Status::internal(format!(
+                                "failed to create msquic config: {:?}",
+                                e
+                            ))
+                            .into()));
+                            return;
+                        }
+                    };
+                    client.reg = Some(reg.clone());
+                    let uri: Uri = match server_url.parse() {
+                        Ok(uri) => uri,
+                        Err(e) => {
+                            let _ = tx.send(Err(tonic::Status::internal(format!(
+                                "invalid server url: {:?}",
+                                e
+                            ))
+                            .into()));
+                            return;
+                        }
+                    };
+                    let connector = H3MsQuicAsyncConnector::new(uri.clone(), config, reg);
+                    let channel = H3Channel::new(connector, uri.clone());
+                    let flight_client = FlightServiceClient::new(channel);
+                    let _ = tx.send(Ok(flight_client));
                 });
                 client.state = FlightClientState::H3(FlightClientStateH3::Connecting(rx));
                 Ok(())
             }
-            _ => {
-                Err(ErrorCode::InvalidState.into())
-            }
+            _ => Err(ErrorCode::InvalidState.into()),
         }
     }
 
@@ -1142,7 +1147,13 @@ where
     }
 
     fn drop(&mut self, id: Resource<HostFlightClient>) -> wasmtime::Result<()> {
-        let _ = self.table().delete(id)?;
+        let mut client = self.table().delete(id)?;
+        if let Some(reg) = client.reg.take() {
+            std::mem::drop(client);
+            std::mem::drop(reg);
+        } else {
+            std::mem::drop(client);
+        }
         Ok(())
     }
 }
