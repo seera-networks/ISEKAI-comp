@@ -51,7 +51,8 @@ tonic-h3 = { path = "../tonic-h3/tonic-h3", default-features = false }
 tonic-web = { version = "0.14.3" }
 tower-http = { version = "0.6.2", default-features = false, features = ["cors"] }
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3", features = ["fmt", "ansi", "env-filter", "time", "tracing-log"] }
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json", "fmt", "time"] }
 wasi = "0.14.0"
 wasmtime = "38.0.3"
 wasmtime-wasi = "38.0.3"

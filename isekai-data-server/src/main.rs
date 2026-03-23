@@ -29,6 +29,8 @@ use tonic::transport::Server;
 use tonic::{Request, Response, Status, Streaming};
 #[cfg(feature = "tonic-h3")]
 use tonic_h3::msquic_async::h3_msquic_async::{msquic, msquic_async};
+use tracing::{debug, error, info};
+use tracing_subscriber::{EnvFilter, fmt};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -69,11 +71,11 @@ impl FlightService for FlightServiceImpl {
         request: Request<Streaming<HandshakeRequest>>,
     ) -> Result<Response<Self::HandshakeStream>, Status> {
         let cmd_opts = self.cmd_opts.clone();
-        if request.peer_certs().is_some() {
-            println!("Client certificate presented");
-        } else {
-            println!("No client certificate presented");
-        }
+        // if request.peer_certs().is_some() {
+        //     println!("Client certificate presented");
+        // } else {
+        //     println!("No client certificate presented");
+        // }
         let mut inbound = request.into_inner();
 
         let mut cnt = 0;
@@ -85,7 +87,7 @@ impl FlightService for FlightServiceImpl {
             while let Some(handshake_request) = inbound.next().await {
                 let req = handshake_request?;
                 let resp = if cnt == 0 {
-                    println!("handshake rquest1");
+                    debug!("handshake rquest1");
                     cnt += 1;
                     if cmd_opts.use_test_challenge {
                         challenge.copy_from_slice(&snpguest::report::TEST_REQ_DATA[0..64]);
@@ -98,36 +100,36 @@ impl FlightService for FlightServiceImpl {
                         payload: bytes::Bytes::copy_from_slice(&challenge),
                     }
                 } else if cnt == 1{
-                    println!("handshake rquest2");
+                    debug!("handshake rquest2");
                     cnt += 1;
                     let mut att_file = tempfile::NamedTempFile::new()?;
                     att_file.write(&req.payload)?;
                     let att_path = att_file.path().to_path_buf();
                     let certs_dir = std::path::PathBuf::from("/tmp/ext-grpc-server/snpguest/certs");
                     let att_res = snpguest::verify2::fetch_and_verify_async(certs_dir, att_path, true).await;
-                    println!("handshake rquest2 done");
+                    debug!("handshake rquest2 done");
                     let att_report = match att_res {
                         Err(e) => {
-                            println!("failed to verify attestation report: {:#?}", e);
+                            error!("failed to verify attestation report: {:#?}", e);
                             Err(Status::unauthenticated(format!("failed to verify attestation report: {:#?}", e)))
                         },
                         Ok(r) => {
-                            println!("successfully verified attestation report");
+                            info!("successfully verified attestation report");
                             Ok(r)
                         }
                     }?;
                     if att_report.report_data != challenge {
-                        println!("attestation report data does not match challenge");
+                        error!("attestation report data does not match challenge");
                         return Err(Status::unauthenticated("attestation report data does not match challenge"))?
                     }
                     if let Some(ld) = server_ld {
                         if att_report.measurement != ld {
-                            println!("launch digest does not match expected value");
+                            error!("launch digest does not match expected value");
                             return Err(Status::unauthenticated("launch digest does not match expected value"))?
                         }
-                        println!("successfully verified launch digest");
+                        info!("successfully verified launch digest");
                     } else {
-                        println!("no server-ld configured, skipping");
+                        info!("no server-ld configured, skipping");
                     }
                     let mut token = [0u8; 64];
                     OsRng.fill_bytes(&mut token);
@@ -176,7 +178,7 @@ impl FlightService for FlightServiceImpl {
         &self,
         request: Request<Ticket>,
     ) -> Result<Response<Self::DoGetStream>, Status> {
-        println!("do_get");
+        debug!("do_get");
 
         let token = request
             .metadata()
@@ -197,6 +199,7 @@ impl FlightService for FlightServiceImpl {
                 }
             })?;
         if !self.valid_tokens.lock().unwrap().contains(&token) {
+            error!("Invalid token: {}", token);
             return Err(Status::unauthenticated(format!("Invalid token: {}", token)));
         }
 
@@ -272,10 +275,11 @@ impl FlightService for FlightServiceImpl {
 
             let policy = match res {
                 Ok(policy) => {
-                    println!("subject: {}, policy: {}", subject, policy);
+                    info!("subject: {}, policy: {}", subject, policy);
                     policy
                 }
                 Err(e) => {
+                    error!("failed to get policy: {:?}", e);
                     return Err(Status::internal(format!("failed to get policy: {:?}", e)));
                 }
             };
@@ -310,7 +314,7 @@ impl FlightService for FlightServiceImpl {
         &self,
         request: Request<Streaming<FlightData>>,
     ) -> Result<Response<Self::DoPutStream>, Status> {
-        println!("do_put");
+        debug!("do_put");
 
         let token = request
             .metadata()
@@ -397,14 +401,14 @@ impl FlightService for FlightServiceImpl {
                 x.payload
             }) {
                 Err(e) => {
-                    println!("error: {:?}", e);
+                    error!("error: {:?}", e);
                     continue;
                 }
                 Ok(DecodedPayload::None) => {
-                    println!("none");
+                    error!("Received empty payload");
+                    continue;
                 }
                 Ok(DecodedPayload::Schema(schema)) => {
-                    println!("schema: {:?}", schema);
                     target = Some(
                         storage::create_storage(&self.cmd_opts, &subject, schema, policy.take())
                             .map_err(|e| {
@@ -611,10 +615,18 @@ fn make_msquic_async_listner(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
-        .with_writer(std::io::stderr)
+    let file_appender = tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("isekai-data-server")
+        .filename_suffix("log")
+        .build("./logs")
+        .expect("Failed to create log file appender");
+
+    let filter = EnvFilter::try_from_env("ISEKAI_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
+    fmt()
+        .with_env_filter(filter)
+        .with_ansi(false)
+        .with_writer(file_appender)
         .init();
 
     let cmd_opts: CmdOptions = argh::from_env();
