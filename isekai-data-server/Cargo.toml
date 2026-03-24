@@ -42,3 +42,6 @@ tonic = { workspace = true }
 tonic-h3 =  { workspace = true, features = ["msquic-async"], optional = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+schannel = { workspace = true }

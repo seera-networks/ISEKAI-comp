@@ -564,14 +564,14 @@ fn make_msquic_async_listner(
         use schannel::cert_store::{CertAdd, Memory};
         use schannel::crypt_prov::{AcquireOptions, ProviderType};
 
-        let cert = std::fs::read(cert_path)?;
+        let cert = String::from_utf8_lossy(&std::fs::read(cert_path)?).to_string();
         let key = std::fs::read(key_path)?;
 
         let mut store = Memory::new().unwrap().into_store();
 
         let name = String::from("isekai-data-server");
 
-        let cert_ctx = CertContext::from_pem(cert).unwrap();
+        let cert_ctx = CertContext::from_pem(&cert).unwrap();
 
         let mut options = AcquireOptions::new();
         options.container(&name);
@@ -582,7 +582,7 @@ fn make_msquic_async_listner(
             Ok(container) => container,
             Err(_) => options.new_keyset(true).acquire(type_).unwrap(),
         };
-        container.import().import_pkcs8_pem(key).unwrap();
+        container.import().import_pkcs8_pem(&key).unwrap();
 
         cert_ctx
             .set_key_prov_info()

@@ -1610,6 +1610,8 @@ dependencies = [
 [[package]]
 name = "h3-msquic-async"
 version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89fc961d3bd9e6899d2334e997846d023042d81d86ea92d45ff663b0aaaa77c3"
 dependencies = [
  "bytes",
  "futures",
@@ -2084,6 +2086,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rusqlite",
+ "schannel",
  "serde",
  "serde_json",
  "sha2",
@@ -2505,6 +2508,8 @@ dependencies = [
 [[package]]
 name = "msquic-async"
 version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a18da17f10ee9e154ebd52e29f0b1ad44a326b56cdccbe91bb7b73c0f02e9cec"
 dependencies = [
  "bytes",
  "futures-io",
@@ -2679,6 +2684,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "openssl-src"
+version = "300.5.4+3.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a507b3792995dae9b0df8a1c1e3771e8418b7c2d9f0baeba32e6fe8b06c7cb72"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.110"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2686,6 +2700,7 @@ checksum = "0a9f0075ba3c21b09f8e8b2026584b1d18d49388648f2fbbf3c97ea8deced8e2"
 dependencies = [
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
@@ -3465,6 +3480,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
+name = "schannel"
+version = "0.1.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91c1b7e4904c873ef0710c1f407dde2e6287de2bebc1bbbf7d430bb7cbffd939"
+dependencies = [
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3473,6 +3497,8 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "seera-msquic"
 version = "2.6.0-beta2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68915b5f072e378c1d7ac8b47677dc3d7ddd02d380b652f8156b7255e29f62a0"
 dependencies = [
  "bitflags 2.10.0",
  "c-types",
