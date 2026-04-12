@@ -36,3 +36,8 @@ struct Flight<T>(T);
 impl<T: 'static> HasData for Flight<T> {
     type Data<'a> = FlightImpl<&'a mut T>;
 }
+
+pub fn close_mywasi_flight() {
+    #[cfg(feature = "tonic-h3")]
+    crate::types_impl::close_tonic_h3();
+}

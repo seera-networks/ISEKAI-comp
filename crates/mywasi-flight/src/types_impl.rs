@@ -32,6 +32,7 @@ use tonic::Request;
 #[cfg(feature = "tonic-h3")]
 use tonic_h3::{
     msquic_async::h3_msquic_async::msquic, msquic_async::H3MsQuicAsyncConnector, H3Channel,
+    SharedExec,
 };
 use wasmtime::component::*;
 use wasmtime_wasi::p2::{subscribe, DynPollable};
@@ -39,6 +40,31 @@ use wasmtime_wasi::{async_trait, runtime::with_ambient_tokio_runtime};
 
 static LAZY_SHARED_CLIENTS: LazyLock<Arc<Mutex<HashMap<FlightCtx, FlightServiceClient<Channel>>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+#[cfg(feature = "tonic-h3")]
+static LAZY_SHARED_REGISTRATION: LazyLock<Arc<Mutex<Option<Arc<msquic::Registration>>>>> =
+    LazyLock::new(|| {
+        Arc::new(Mutex::new(Some(Arc::new(
+            msquic::Registration::new(&msquic::RegistrationConfig::default()).unwrap(),
+        ))))
+    });
+#[cfg(feature = "tonic-h3")]
+static LAZY_SHARED_CLIENTS_H3: LazyLock<
+    Arc<Mutex<HashMap<FlightCtx, FlightServiceClient<H3Channel<H3MsQuicAsyncConnector>>>>>,
+> = LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+#[cfg(feature = "tonic-h3")]
+pub(crate) fn close_tonic_h3() {
+    LAZY_SHARED_CLIENTS_H3.lock().unwrap().clear();
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    if let Some(shared_registration) = LAZY_SHARED_REGISTRATION.lock().unwrap().take() {
+        while Arc::strong_count(&shared_registration) > 1 {
+            // Wait for all clients to be dropped before dropping the registration
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        // Now it's safe to drop the registration
+        std::mem::drop(shared_registration);
+    }
+}
 
 #[async_trait]
 impl<T> crate::bindings::flight::client::Host for FlightImpl<T>
@@ -51,13 +77,11 @@ where
             HostFlightClient {
                 state: FlightClientState::H3(FlightClientStateH3::Default),
                 token: None,
-                reg: None,
             }
         } else {
             HostFlightClient {
                 state: FlightClientState::H2(FlightClientStateH2::Default),
                 token: None,
-                reg: None,
             }
         };
         #[cfg(not(feature = "tonic-h3"))]
@@ -252,18 +276,21 @@ where
 }
 
 #[cfg(feature = "tonic-h3")]
-fn make_msquic_reg_and_config(
+fn make_msquic_config(
     client_pem: Option<(Vec<u8>, Vec<u8>)>,
     ca_cert_pem: Option<Vec<u8>>,
-) -> anyhow::Result<(Arc<msquic::Registration>, Arc<msquic::Configuration>)> {
-    let registration = msquic::Registration::new(&msquic::RegistrationConfig::default())?;
+) -> anyhow::Result<Arc<msquic::Configuration>> {
     let alpn = [msquic::BufferRef::from("h3")];
     let configuration = msquic::Configuration::open(
-        &registration,
+        LAZY_SHARED_REGISTRATION
+            .lock()
+            .unwrap()
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("msquic registration is not available"))?,
         &alpn,
         Some(
             &msquic::Settings::new()
-                .set_IdleTimeoutMs(100000)
+                .set_IdleTimeoutMs(100_000)
                 .set_PeerBidiStreamCount(100)
                 .set_PeerUnidiStreamCount(100)
                 .set_DatagramReceiveEnabled()
@@ -308,7 +335,7 @@ fn make_msquic_reg_and_config(
     };
 
     configuration.load_credential(&cred_config)?;
-    Ok((Arc::new(registration), Arc::new(configuration)))
+    Ok(Arc::new(configuration))
 }
 
 #[async_trait]
@@ -392,7 +419,16 @@ where
             }
             #[cfg(feature = "tonic-h3")]
             FlightClientState::H3(FlightClientStateH3::Default) => {
+                let shared_clients = LAZY_SHARED_CLIENTS_H3.clone();
                 let (tx, rx) = oneshot::channel();
+                if let Some(flight_client) = shared_clients.lock().unwrap().get(&ctx) {
+                    let flight_client = flight_client.clone();
+                    with_ambient_tokio_runtime(move || {
+                        let _ = tx.send(Ok(flight_client));
+                    });
+                    client.state = FlightClientState::H3(FlightClientStateH3::Connecting(rx));
+                    return Ok(());
+                }
 
                 let server_url = ctx.server_url.clone();
                 let client_cert_pem = ctx.client_cert_pem.clone();
@@ -411,7 +447,7 @@ where
                         }
                         _ => None,
                     };
-                    let (reg, config) = match make_msquic_reg_and_config(client_pem, ca_cert_pem) {
+                    let config = match make_msquic_config(client_pem, ca_cert_pem) {
                         Ok(res) => res,
                         Err(e) => {
                             let _ = tx.send(Err(tonic::Status::internal(format!(
@@ -422,7 +458,6 @@ where
                             return;
                         }
                     };
-                    client.reg = Some(reg.clone());
                     let uri: Uri = match server_url.parse() {
                         Ok(uri) => uri,
                         Err(e) => {
@@ -434,9 +469,24 @@ where
                             return;
                         }
                     };
+                    let reg = match LAZY_SHARED_REGISTRATION.lock().unwrap().as_ref() {
+                        Some(reg) => reg.clone(),
+                        None => {
+                            let _ = tx.send(Err(tonic::Status::internal(
+                                "msquic registration is not available".to_string(),
+                            )
+                            .into()));
+                            return;
+                        }
+                    };
+
                     let connector = H3MsQuicAsyncConnector::new(uri.clone(), config, reg);
-                    let channel = H3Channel::new(connector, uri.clone());
+                    let channel = H3Channel::new(connector, uri.clone(), SharedExec::tokio());
                     let flight_client = FlightServiceClient::new(channel);
+                    shared_clients
+                        .lock()
+                        .unwrap()
+                        .insert(ctx, flight_client.clone());
                     let _ = tx.send(Ok(flight_client));
                 });
                 client.state = FlightClientState::H3(FlightClientStateH3::Connecting(rx));
@@ -1147,13 +1197,7 @@ where
     }
 
     fn drop(&mut self, id: Resource<HostFlightClient>) -> wasmtime::Result<()> {
-        let mut client = self.table().delete(id)?;
-        if let Some(reg) = client.reg.take() {
-            std::mem::drop(client);
-            std::mem::drop(reg);
-        } else {
-            std::mem::drop(client);
-        }
+        let _ = self.table().delete(id)?;
         Ok(())
     }
 }
