@@ -1,5 +1,7 @@
 ISEKAIデータサーバー説明書
 --
+[English version is available here: README.en.md](README.en.md)
+
 <!-- TOC -->
 - [概要](#概要)
 - [使い方](#使い方)

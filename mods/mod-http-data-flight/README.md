@@ -1,5 +1,7 @@
 ISEKAIデータ提供モジュール説明書
 --
+[English version is available here: README.en.md](README.en.md)
+
 <!-- TOC -->
 - [概要](#概要)
 - [ISEKAIデータ提供モジュールのビルド方法](#isekaiデータ提供モジュールのビルド方法)
