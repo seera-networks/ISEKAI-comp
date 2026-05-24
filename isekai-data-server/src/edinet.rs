@@ -24,10 +24,17 @@ enum Value {
     String(String),
 }
 
+/// Validates user-influenced filename parts to prevent path traversal when
+/// composing parquet file paths.
 fn validate_path_component(component: &str, field_name: &str) -> Result<()> {
     if component.is_empty() {
         return Err(Status::invalid_argument(format!(
             "{field_name} must not be empty"
+        )));
+    }
+    if component.contains('\0') {
+        return Err(Status::invalid_argument(format!(
+            "invalid {field_name}: NUL bytes are not allowed"
         )));
     }
 
