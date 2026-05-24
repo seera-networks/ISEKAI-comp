@@ -250,8 +250,10 @@ impl FlightService for FlightServiceImpl {
                     Status::unauthenticated(format!("jwt should be valid: {:?}", x))
                 })?;
             decoded_token.claims.sub.replace("|", "_")
-        } else {
+        } else if self.cmd_opts.allow_test_subject {
             "test".to_string()
+        } else {
+            return Err(Status::unauthenticated("No JWT provided"));
         };
 
         if !auth::authenticate_subject(&self.cmd_opts, &subject) {
@@ -386,8 +388,10 @@ impl FlightService for FlightServiceImpl {
                     Status::unauthenticated(format!("jwt should be valid: {:?}", x))
                 })?;
             decoded_token.claims.sub.replace("|", "_")
-        } else {
+        } else if self.cmd_opts.allow_test_subject {
             "test".to_string()
+        } else {
+            return Err(Status::unauthenticated("No JWT provided"));
         };
 
         if !auth::authenticate_subject(&self.cmd_opts, &subject) {
@@ -510,6 +514,10 @@ pub struct CmdOptions {
     /// use test challenge for non SEV-SNP environment
     #[argh(switch)]
     use_test_challenge: bool,
+
+    /// allow requests without JWT to be treated as subject "test"
+    #[argh(switch)]
+    allow_test_subject: bool,
 
     #[argh(option)]
     /// expected server launch digest in base64 format
