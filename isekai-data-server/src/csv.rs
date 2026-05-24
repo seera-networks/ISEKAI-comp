@@ -83,9 +83,7 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
                         }
                     });
                 data.get_mut(idx)
-                    .ok_or_else(|| {
-                        Status::internal(format!("missing destination column {}", idx))
-                    })?
+                    .ok_or_else(|| Status::internal(format!("missing destination column {}", idx)))?
                     .1
                     .push(v);
             }

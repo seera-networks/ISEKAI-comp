@@ -5,12 +5,12 @@ use crate::CmdOptions;
 use arrow::array::{self, AsArray};
 use arrow::record_batch::RecordBatch;
 use arrow_schema::{DataType, SchemaRef};
+use isekai_utils::policy::PolicyFile;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use isekai_utils::policy::PolicyFile;
 
 fn is_valid_sqlid(name: &str) -> bool {
     // A valid SQL identifier must start with a letter and can contain letters, digits, and underscores
@@ -94,7 +94,11 @@ fn create_storage_in_tx(
             if i > 0 {
                 sql.push_str(", ");
             }
-            sql.push_str(&format!("{} {}", field_name, sql_type_for(field.data_type())));
+            sql.push_str(&format!(
+                "{} {}",
+                field_name,
+                sql_type_for(field.data_type())
+            ));
         }
         sql.push(')');
 
@@ -119,7 +123,9 @@ fn create_storage_in_tx(
                 if err.code == rusqlite::ErrorCode::DatabaseBusy
                     || err.code == rusqlite::ErrorCode::DatabaseLocked =>
             {
-                return Err(anyhow::Error::from(rusqlite::Error::SqliteFailure(err, None)));
+                return Err(anyhow::Error::from(rusqlite::Error::SqliteFailure(
+                    err, None,
+                )));
             }
             Err(rusqlite::Error::SqliteFailure(err, _))
                 if err.code == rusqlite::ErrorCode::Unknown
@@ -131,7 +137,9 @@ fn create_storage_in_tx(
         }
     }
 
-    Err(anyhow::anyhow!("Failed to generate a unique storage target"))
+    Err(anyhow::anyhow!(
+        "Failed to generate a unique storage target"
+    ))
 }
 
 pub fn create_storage(
@@ -162,10 +170,10 @@ enum StorageValue {
 impl rusqlite::types::ToSql for StorageValue {
     fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         match self {
-            StorageValue::Null => Ok(rusqlite::types::ToSqlOutput::from(
-                rusqlite::types::Null,
-            )),
-            StorageValue::Boolean(v) => Ok(rusqlite::types::ToSqlOutput::from(if *v { 1 } else { 0 })),
+            StorageValue::Null => Ok(rusqlite::types::ToSqlOutput::from(rusqlite::types::Null)),
+            StorageValue::Boolean(v) => {
+                Ok(rusqlite::types::ToSqlOutput::from(if *v { 1 } else { 0 }))
+            }
             StorageValue::Int32(v) => Ok(rusqlite::types::ToSqlOutput::from(*v)),
             StorageValue::Float32(v) => Ok(rusqlite::types::ToSqlOutput::from(*v)),
             StorageValue::Utf8(v) => Ok(rusqlite::types::ToSqlOutput::from(v.as_str())),
@@ -306,7 +314,9 @@ fn get_column_type(
         "SELECT arrow_type FROM storage_schema WHERE table_name = ? AND column_name = ?",
     )?;
     let arrow_type = stmt
-        .query_row(rusqlite::params![tbl_name, column_name], |row| row.get::<_, String>(0))
+        .query_row(rusqlite::params![tbl_name, column_name], |row| {
+            row.get::<_, String>(0)
+        })
         .optional()?;
     if let Some(arrow_type) = arrow_type {
         return match arrow_type.as_str() {
@@ -315,14 +325,19 @@ fn get_column_type(
             "float32" => Ok(DataType::Float32),
             "utf8" => Ok(DataType::Utf8),
             "binary" => Ok(DataType::Binary),
-            _ => Err(anyhow::anyhow!("Unsupported stored column type: {}", arrow_type)),
+            _ => Err(anyhow::anyhow!(
+                "Unsupported stored column type: {}",
+                arrow_type
+            )),
         };
     }
 
     let pragma = format!("PRAGMA table_info({})", tbl_name);
     let mut stmt = conn.prepare(&pragma)?;
     let declared_type = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(1)?, row.get::<_, String>(2)?)))?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+        })?
         .find_map(|row| match row {
             Ok((name, ty)) if name == column_name => Some(Ok(ty)),
             Ok(_) => None,
@@ -376,7 +391,10 @@ pub fn get_data(
                 .collect::<Vec<_>>();
             let new_field = arrow_schema::Field::new(column_name, DataType::Boolean, true);
             let new_array = Arc::new(arrow::array::BooleanArray::from(values)) as _;
-            RecordBatch::try_new(Arc::new(arrow_schema::Schema::new(vec![new_field])), vec![new_array])?
+            RecordBatch::try_new(
+                Arc::new(arrow_schema::Schema::new(vec![new_field])),
+                vec![new_array],
+            )?
         }
         DataType::Int32 => {
             let values = stmt
@@ -384,7 +402,10 @@ pub fn get_data(
                 .collect::<Result<Vec<_>, _>>()?;
             let new_field = arrow_schema::Field::new(column_name, DataType::Int32, true);
             let new_array = Arc::new(arrow::array::Int32Array::from(values)) as _;
-            RecordBatch::try_new(Arc::new(arrow_schema::Schema::new(vec![new_field])), vec![new_array])?
+            RecordBatch::try_new(
+                Arc::new(arrow_schema::Schema::new(vec![new_field])),
+                vec![new_array],
+            )?
         }
         DataType::Float32 => {
             let values = stmt
@@ -392,7 +413,10 @@ pub fn get_data(
                 .collect::<Result<Vec<_>, _>>()?;
             let new_field = arrow_schema::Field::new(column_name, DataType::Float32, true);
             let new_array = Arc::new(arrow::array::Float32Array::from(values)) as _;
-            RecordBatch::try_new(Arc::new(arrow_schema::Schema::new(vec![new_field])), vec![new_array])?
+            RecordBatch::try_new(
+                Arc::new(arrow_schema::Schema::new(vec![new_field])),
+                vec![new_array],
+            )?
         }
         DataType::Utf8 => {
             let values = stmt
@@ -400,7 +424,10 @@ pub fn get_data(
                 .collect::<Result<Vec<_>, _>>()?;
             let new_field = arrow_schema::Field::new(column_name, DataType::Utf8, true);
             let new_array = Arc::new(arrow::array::StringArray::from(values)) as _;
-            RecordBatch::try_new(Arc::new(arrow_schema::Schema::new(vec![new_field])), vec![new_array])?
+            RecordBatch::try_new(
+                Arc::new(arrow_schema::Schema::new(vec![new_field])),
+                vec![new_array],
+            )?
         }
         DataType::Binary => {
             let values = stmt
@@ -412,7 +439,10 @@ pub fn get_data(
                 .collect::<Vec<_>>();
             let new_field = arrow_schema::Field::new(column_name, DataType::Binary, true);
             let new_array = Arc::new(arrow::array::BinaryArray::from(borrowed_values)) as _;
-            RecordBatch::try_new(Arc::new(arrow_schema::Schema::new(vec![new_field])), vec![new_array])?
+            RecordBatch::try_new(
+                Arc::new(arrow_schema::Schema::new(vec![new_field])),
+                vec![new_array],
+            )?
         }
         _ => {
             return Err(anyhow::anyhow!(
@@ -488,7 +518,11 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let db_path = temp_dir.path().join("storage.db");
         let cmd_opts = test_cmd_opts(db_path.to_str().unwrap());
-        let schema = Arc::new(Schema::new(vec![Field::new("value", DataType::Int32, true)]));
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "value",
+            DataType::Int32,
+            true,
+        )]));
 
         let first = create_storage(&cmd_opts, "subject", schema.clone(), None).unwrap();
         let second = create_storage(&cmd_opts, "subject", schema, None).unwrap();

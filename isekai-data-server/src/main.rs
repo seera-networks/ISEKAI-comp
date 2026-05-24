@@ -469,7 +469,9 @@ impl FlightService for FlightServiceImpl {
                 }
                 DecodedPayload::Schema(decoded_schema) => {
                     if schema.is_some() {
-                        return Err(Status::invalid_argument("Multiple schemas are not supported"));
+                        return Err(Status::invalid_argument(
+                            "Multiple schemas are not supported",
+                        ));
                     }
                     schema = Some(decoded_schema);
                 }
@@ -684,14 +686,17 @@ mod tests {
         let now = Instant::now();
 
         for i in 0..=MAX_VALID_TOKENS {
-            store.insert(format!("token-{i}"), now + Duration::from_secs(i as u64));
+            store.insert(format!("token-{i}"), now + Duration::from_millis(i as u64));
         }
 
         assert_eq!(store.tokens.len(), MAX_VALID_TOKENS);
-        assert!(!store.contains("token-0", now + Duration::from_secs(MAX_VALID_TOKENS as u64)));
+        assert!(!store.contains(
+            "token-0",
+            now + Duration::from_millis(MAX_VALID_TOKENS as u64),
+        ));
         assert!(store.contains(
             &format!("token-{MAX_VALID_TOKENS}"),
-            now + Duration::from_secs(MAX_VALID_TOKENS as u64),
+            now + Duration::from_millis(MAX_VALID_TOKENS as u64),
         ));
     }
 }
