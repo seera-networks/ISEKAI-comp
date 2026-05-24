@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::CmdOptions;
+use anyhow::Context;
 use arrow::array::{self, AsArray};
 use arrow::record_batch::RecordBatch;
 use arrow_schema::{DataType, SchemaRef};
@@ -17,6 +18,8 @@ fn is_valid_sqlid(name: &str) -> bool {
     let re = regex::Regex::new(r"^[a-zA-Z][a-zA-Z0-9_]*$").unwrap();
     re.is_match(name)
 }
+
+const MAX_TARGET_GENERATION_ATTEMPTS: usize = 16;
 
 fn ensure_storage_metadata_tables(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute(
@@ -51,6 +54,16 @@ fn generate_target() -> String {
     format!("{}_{}_{}", now.as_secs(), now.subsec_nanos(), random)
 }
 
+fn table_exists(conn: &Connection, table_name: &str) -> anyhow::Result<bool> {
+    let mut stmt =
+        conn.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1")?;
+    let exists = stmt
+        .query_row(rusqlite::params![table_name], |_| Ok(()))
+        .optional()?
+        .is_some();
+    Ok(exists)
+}
+
 fn sql_type_for(field_type: &DataType) -> &'static str {
     match field_type {
         DataType::Boolean | DataType::Int32 => "INTEGER",
@@ -78,11 +91,14 @@ fn create_storage_in_tx(
     policy: Option<String>,
 ) -> anyhow::Result<String> {
     ensure_storage_metadata_tables(tx)?;
-    for _ in 0..16 {
+    for _ in 0..MAX_TARGET_GENERATION_ATTEMPTS {
         let target = generate_target();
         let tbl_name = format!("{}_{}", subject, target);
         if !is_valid_sqlid(&tbl_name) {
             return Err(anyhow::anyhow!("Invalid table name: {}", tbl_name));
+        }
+        if table_exists(tx, &tbl_name)? {
+            continue;
         }
 
         let mut sql = format!("CREATE TABLE {} (", tbl_name);
@@ -102,43 +118,35 @@ fn create_storage_in_tx(
         }
         sql.push(')');
 
-        match tx.execute(&sql, []) {
-            Ok(_) => {
-                for field in schema.fields.iter() {
-                    let arrow_type = arrow_type_name(field.data_type())?;
-                    tx.execute(
-                        "INSERT INTO storage_schema (table_name, column_name, arrow_type) VALUES (?, ?, ?)",
-                        rusqlite::params![&tbl_name, field.name(), arrow_type],
-                    )?;
-                }
-                if let Some(policy) = policy {
-                    tx.execute(
-                        "INSERT INTO policy (table_name, json) VALUES (?, ?)",
-                        rusqlite::params![&tbl_name, &policy],
-                    )?;
-                }
-                return Ok(target);
-            }
-            Err(rusqlite::Error::SqliteFailure(err, _))
-                if err.code == rusqlite::ErrorCode::DatabaseBusy
-                    || err.code == rusqlite::ErrorCode::DatabaseLocked =>
-            {
-                return Err(anyhow::Error::from(rusqlite::Error::SqliteFailure(
-                    err, None,
-                )));
-            }
-            Err(rusqlite::Error::SqliteFailure(err, _))
-                if err.code == rusqlite::ErrorCode::Unknown
-                    && err.extended_code == rusqlite::ffi::SQLITE_ERROR =>
-            {
-                continue;
-            }
-            Err(err) => return Err(anyhow::Error::from(err)),
+        tx.execute(&sql, [])
+            .with_context(|| format!("failed to create storage table {}", tbl_name))?;
+        for field in schema.fields.iter() {
+            let arrow_type = arrow_type_name(field.data_type())?;
+            tx.execute(
+                "INSERT INTO storage_schema (table_name, column_name, arrow_type) VALUES (?, ?, ?)",
+                rusqlite::params![&tbl_name, field.name(), arrow_type],
+            )
+            .with_context(|| {
+                format!(
+                    "failed to persist schema metadata for {}.{}",
+                    tbl_name,
+                    field.name()
+                )
+            })?;
         }
+        if let Some(policy) = policy {
+            tx.execute(
+                "INSERT INTO policy (table_name, json) VALUES (?, ?)",
+                rusqlite::params![&tbl_name, &policy],
+            )
+            .with_context(|| format!("failed to persist policy for table {}", tbl_name))?;
+        }
+        return Ok(target);
     }
 
     Err(anyhow::anyhow!(
-        "Failed to generate a unique storage target"
+        "Failed to generate a unique storage target after {} attempts",
+        MAX_TARGET_GENERATION_ATTEMPTS
     ))
 }
 
@@ -488,7 +496,7 @@ pub fn get_policy(
 
 #[cfg(test)]
 mod tests {
-    use super::{create_storage, get_data, store_data};
+    use super::{create_storage, get_data, insert_data};
     use crate::CmdOptions;
     use arrow::array::{BinaryArray, BooleanArray, Float32Array, Int32Array, StringArray};
     use arrow::record_batch::RecordBatch;
@@ -554,7 +562,8 @@ mod tests {
         )
         .unwrap();
 
-        let target = store_data(&cmd_opts, "subject", schema, None, vec![batch]).unwrap();
+        let target = create_storage(&cmd_opts, "subject", schema, None).unwrap();
+        insert_data(&cmd_opts, "subject", &target, batch).unwrap();
 
         assert_eq!(
             get_data(&cmd_opts, "subject", &target, "flag").unwrap()[0]
