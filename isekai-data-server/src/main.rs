@@ -67,7 +67,7 @@ impl ValidTokenStore {
     fn insert(&mut self, token: String, now: Instant) {
         self.prune(now);
         self.tokens.insert(token, now + HANDSHAKE_TOKEN_TTL);
-        while self.tokens.len() > MAX_VALID_TOKENS {
+        if self.tokens.len() > MAX_VALID_TOKENS {
             if let Some(expired_token) = self
                 .tokens
                 .iter()
@@ -75,13 +75,11 @@ impl ValidTokenStore {
                 .map(|(token, _)| token.clone())
             {
                 self.tokens.remove(&expired_token);
-            } else {
-                break;
             }
         }
     }
 
-    fn contains(&mut self, token: &str, now: Instant) -> bool {
+    fn is_valid(&mut self, token: &str, now: Instant) -> bool {
         self.prune(now);
         self.tokens.contains_key(token)
     }
@@ -248,7 +246,7 @@ impl FlightService for FlightServiceImpl {
             .valid_tokens
             .lock()
             .unwrap()
-            .contains(&token, Instant::now())
+            .is_valid(&token, Instant::now())
         {
             error!("Invalid token");
             return Err(Status::unauthenticated("Invalid token"));
@@ -391,7 +389,7 @@ impl FlightService for FlightServiceImpl {
             .valid_tokens
             .lock()
             .unwrap()
-            .contains(&token, Instant::now())
+            .is_valid(&token, Instant::now())
         {
             return Err(Status::unauthenticated("Invalid token"));
         }
@@ -676,8 +674,8 @@ mod tests {
         let now = Instant::now();
 
         store.insert("valid".to_string(), now);
-        assert!(store.contains("valid", now + Duration::from_secs(1)));
-        assert!(!store.contains("valid", now + HANDSHAKE_TOKEN_TTL + Duration::from_secs(1)));
+        assert!(store.is_valid("valid", now + Duration::from_secs(1)));
+        assert!(!store.is_valid("valid", now + HANDSHAKE_TOKEN_TTL + Duration::from_secs(1),));
     }
 
     #[test]
@@ -690,11 +688,11 @@ mod tests {
         }
 
         assert_eq!(store.tokens.len(), MAX_VALID_TOKENS);
-        assert!(!store.contains(
+        assert!(!store.is_valid(
             "token-0",
             now + Duration::from_millis(MAX_VALID_TOKENS as u64),
         ));
-        assert!(store.contains(
+        assert!(store.is_valid(
             &format!("token-{MAX_VALID_TOKENS}"),
             now + Duration::from_millis(MAX_VALID_TOKENS as u64),
         ));

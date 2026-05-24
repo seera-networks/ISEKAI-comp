@@ -45,9 +45,9 @@ fn generate_target() -> String {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");
-    let mut random = [0u8; 8];
-    OsRng.fill_bytes(&mut random);
-    let random = random
+    let mut random_bytes = [0u8; 8];
+    OsRng.fill_bytes(&mut random_bytes);
+    let random = random_bytes
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>();
@@ -64,7 +64,7 @@ fn table_exists(conn: &Connection, table_name: &str) -> anyhow::Result<bool> {
     Ok(exists)
 }
 
-fn sql_type_for(field_type: &DataType) -> &'static str {
+fn arrow_to_sql_type(field_type: &DataType) -> &'static str {
     match field_type {
         DataType::Boolean | DataType::Int32 => "INTEGER",
         DataType::Float32 => "REAL",
@@ -91,12 +91,12 @@ fn create_storage_in_tx(
     policy: Option<String>,
 ) -> anyhow::Result<String> {
     ensure_storage_metadata_tables(tx)?;
+    if !is_valid_sqlid(subject) {
+        return Err(anyhow::anyhow!("Invalid subject name: {}", subject));
+    }
     for _ in 0..MAX_TARGET_GENERATION_ATTEMPTS {
         let target = generate_target();
         let tbl_name = format!("{}_{}", subject, target);
-        if !is_valid_sqlid(&tbl_name) {
-            return Err(anyhow::anyhow!("Invalid table name: {}", tbl_name));
-        }
         if table_exists(tx, &tbl_name)? {
             continue;
         }
@@ -113,7 +113,7 @@ fn create_storage_in_tx(
             sql.push_str(&format!(
                 "{} {}",
                 field_name,
-                sql_type_for(field.data_type())
+                arrow_to_sql_type(field.data_type())
             ));
         }
         sql.push(')');
