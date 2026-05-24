@@ -137,7 +137,7 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
                     }
                 });
 
-            if datas.len() > 0 && &datas.back().unwrap().0 == &edinet_id {
+            if !datas.is_empty() && datas.back().unwrap().0 == edinet_id {
                 let mut idx = 0;
                 let mut key = format!("{}_{}", date.year(), idx);
                 loop {
@@ -280,7 +280,7 @@ pub fn get_policy(
         let val: String = row.get(0)?;
         Ok(val)
     })?;
-    if let Some(policy) = entry_iter.last().map(|x| x.unwrap()) {
+    if let Some(policy) = entry_iter.last().transpose()? {
         return Ok(policy);
     }
 
@@ -295,7 +295,7 @@ pub fn get_policy(
         let val: String = row.get(0)?;
         Ok(val)
     })?;
-    if let Some(policy) = entry_iter.last().map(|x| x.unwrap()) {
+    if let Some(policy) = entry_iter.last().transpose()? {
         let mut policy = PolicyFile::from_json(&policy);
         policy.rules.get_mut(&item).map(|rule| {
             rule.column_name = column_name.to_owned();

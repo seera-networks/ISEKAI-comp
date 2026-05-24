@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock, Mutex};
 use tonic::{Result, Status};
+use tracing::info;
 use isekai_utils::policy::PolicyFile;
 
 use crate::CmdOptions;
@@ -113,7 +114,7 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
                     .insert(col_name, (field, Data::StringArray(array)));
             }
         }
-        println!("data loaded");
+        info!("data loaded");
         state.data.loaded = true
     }
 
@@ -158,7 +159,7 @@ pub fn get_policy(
         let val: String = row.get(0)?;
         Ok(val)
     })?;
-    if let Some(policy) = entry_iter.last().map(|x| x.unwrap()) {
+    if let Some(policy) = entry_iter.last().transpose()? {
         Ok(policy)
     } else {
         Ok(default_policy(column_name))
