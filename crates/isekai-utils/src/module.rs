@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2025 SEERA Networks Corporation <info@seera-networks.com>
 // SPDX-License-Identifier: MIT
 
-use crate::{NumOrd, img::Detection};
+use crate::{img::Detection, NumOrd};
 
 use super::{jsonize, jsonize_bytes};
 use serde::{Deserialize, Serialize};

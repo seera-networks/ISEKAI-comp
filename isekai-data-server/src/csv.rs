@@ -4,11 +4,11 @@
 use arrow::array::{Float32Array, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
+use isekai_utils::policy::PolicyFile;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock, Mutex};
 use tonic::{Result, Status};
-use isekai_utils::policy::PolicyFile;
 
 use crate::CmdOptions;
 

@@ -5,22 +5,46 @@ use arrow::array::{Float32Array, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use chrono::{Datelike, NaiveDate};
+use isekai_utils::policy::{FunctionPolicy, PolicyFile, PolicyRule};
 use parquet::arrow::{arrow_reader::ParquetRecordBatchReaderBuilder, ArrowWriter};
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 use rusqlite::{params, Connection, OpenFlags};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::OpenOptions;
+use std::path::{Component, Path};
 use std::str::FromStr;
 use std::sync::Arc;
 use tonic::{Result, Status};
-use isekai_utils::policy::{FunctionPolicy, PolicyFile, PolicyRule};
 
 use crate::CmdOptions;
 
 enum Value {
     Float32(f32),
     String(String),
+}
+
+fn validate_path_component(component: &str, field_name: &str) -> Result<()> {
+    if component.is_empty() {
+        return Err(Status::invalid_argument(format!(
+            "{field_name} must not be empty"
+        )));
+    }
+
+    let mut components = Path::new(component).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(_)), None) => Ok(()),
+        _ => Err(Status::invalid_argument(format!(
+            "invalid {field_name}: path separators are not allowed"
+        ))),
+    }
+}
+
+fn parquet_filename(base_path: &str, item: &str, context: &str, year: &str) -> Result<String> {
+    validate_path_component(item, "item")?;
+    validate_path_component(context, "context")?;
+    validate_path_component(year, "year")?;
+    Ok(format!("{base_path}/{item}-{context}-{year}.parquet"))
 }
 
 pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBatch>> {
@@ -46,10 +70,7 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
         year
     };
 
-    let filename = format!(
-        "{}/{}-{}-{}.parquet",
-        cmd_opts.parquet_path, item, context, year
-    );
+    let filename = parquet_filename(&cmd_opts.parquet_path, &item, &context, &year)?;
 
     let file = if let Ok(file) = OpenOptions::new().read(true).open(&filename) {
         file
@@ -77,10 +98,9 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
             .map_err(|e| Status::internal(format!("prepare: {:?}", e)))?;
         let entry_iter = stmt
             .query_map(params![item.clone(), context.clone()], |row| {
-                let edinet_id = String::from_utf8(row.get(0)?).expect("from_utf8");
-                let closing_date =
-                    String::from_utf8(row.get(1).unwrap_or(Vec::new())).expect("from_utf8");
-                let value = row.get(2).unwrap_or("".to_string());
+                let edinet_id: String = row.get(0)?;
+                let closing_date: Option<String> = row.get(1)?;
+                let value: Option<String> = row.get(2)?;
                 Ok((edinet_id, closing_date, value))
             })
             .map_err(|e| Status::internal(format!("query_map: {:?}", e)))?;
@@ -88,6 +108,8 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
         for entry in entry_iter {
             let (edinet_id, closing_date, value) =
                 entry.map_err(|e| Status::internal(format!("Invalid entry: {:?}", e)))?;
+            let closing_date = closing_date.unwrap_or_default();
+            let value = value.unwrap_or_default();
             if closing_date.is_empty() || value.is_empty() {
                 datas.push_back((edinet_id, HashMap::new()));
                 continue;
@@ -176,10 +198,7 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
                 .map_err(|e| Status::internal(format!("failed to new RecordBatch: {:?}", e)))?
             };
 
-            let filename = format!(
-                "{}/{}-{}-{}.parquet",
-                cmd_opts.parquet_path, item, context, year
-            );
+            let filename = parquet_filename(&cmd_opts.parquet_path, &item, &context, &year)?;
             let file = OpenOptions::new()
                 .write(true)
                 .create(true)
@@ -190,7 +209,8 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
                 .set_compression(Compression::SNAPPY)
                 .build();
 
-            let mut writer = ArrowWriter::try_new(file, batch.schema(), Some(props)).unwrap();
+            let mut writer = ArrowWriter::try_new(file, batch.schema(), Some(props))
+                .map_err(|e| Status::internal(format!("failed to create writer: {:?}", e)))?;
 
             writer
                 .write(&batch)

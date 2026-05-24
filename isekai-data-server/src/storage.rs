@@ -5,10 +5,10 @@ use crate::CmdOptions;
 use arrow::array::{self, AsArray};
 use arrow::record_batch::RecordBatch;
 use arrow_schema::SchemaRef;
+use isekai_utils::policy::PolicyFile;
 use rusqlite::{Connection, OpenFlags};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use isekai_utils::policy::PolicyFile;
 
 fn is_valid_sqlid(name: &str) -> bool {
     // A valid SQL identifier must start with a letter and can contain letters, digits, and underscores
