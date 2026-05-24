@@ -128,6 +128,9 @@ gen_certs.shで指定しているドメイン名をlocalhostからisekai-data.ex
     ../target/x86_64-unknown-linux-gnu/release/isekai-data-server --csv-file wooldridge/raw_data/data_csv/wage1.csv --authorized-subject auth0_683eda78562794c7c574c4dc --policy-db ./policy.db --key /etc/letsencrypt/live/isekai-data.example.com/privkey.pem --cert /etc/letsencrypt/live/isekai-data.example.com/fullchain.pem
     ```
 
+- `authorization` ヘッダ（YakAuth JWT）が欠落または不正な場合に `subject=test` へフォールバックしたいときは、`--allow-test-subject-fallback` を指定します。
+  既定ではフォールバックしません。
+
 # certbot を使ったLet's Encryptの証明書設定手順
 
 ## 前提
