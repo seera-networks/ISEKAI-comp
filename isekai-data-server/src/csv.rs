@@ -62,18 +62,32 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
         }
         for r in reader.records() {
             let val = r.map_err(|e| Status::internal(format!("read record: {:?}", e)))?;
+            if val.len() != data.len() {
+                return Err(Status::invalid_argument(format!(
+                    "invalid csv row: expected {} columns but got {}",
+                    data.len(),
+                    val.len()
+                )));
+            }
             for idx in 0..data.len() {
-                let str = val.get(idx).unwrap();
+                let str = val.get(idx).ok_or_else(|| {
+                    Status::invalid_argument(format!("missing column {} in csv row", idx))
+                })?;
                 let v = f32::from_str(str)
                     .map(|v| Some(Value::Float32(v)))
-                    .unwrap_or({
+                    .unwrap_or_else(|_| {
                         if !str.is_empty() {
-                            Some(Value::String(val.get(idx).unwrap().to_string()))
+                            Some(Value::String(str.to_string()))
                         } else {
                             None
                         }
                     });
-                data.get_mut(idx).unwrap().1.push(v);
+                data.get_mut(idx)
+                    .ok_or_else(|| {
+                        Status::internal(format!("missing destination column {}", idx))
+                    })?
+                    .1
+                    .push(v);
             }
         }
 
@@ -109,6 +123,43 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
                     .data
                     .columns
                     .insert(col_name, (field, Data::StringArray(array)));
+            }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::get_data;
+            use crate::CmdOptions;
+
+            fn test_cmd_opts(csv_file: &str) -> CmdOptions {
+                CmdOptions {
+                    no_tls: true,
+                    authorized_subject: None,
+                    csv_file: Some(csv_file.to_string()),
+                    edinet_db: None,
+                    parquet_path: "./parquet".to_string(),
+                    storage_db: "./storage.db".to_string(),
+                    policy_db: "./policy.db".to_string(),
+                    cert: "./certs/server.crt".to_string(),
+                    key: "./certs/server.key".to_string(),
+                    port: 50053,
+                    use_test_challenge: false,
+                    allow_test_subject: true,
+                    server_ld: None,
+                }
+            }
+
+            #[test]
+            fn get_data_returns_error_for_malformed_rows() {
+                let temp_dir = tempfile::tempdir().unwrap();
+                let csv_path = temp_dir.path().join("bad.csv");
+                std::fs::write(&csv_path, "a,b\n1\n").unwrap();
+                let cmd_opts = test_cmd_opts(csv_path.to_str().unwrap());
+
+                let err = get_data(&cmd_opts, "a").unwrap_err();
+
+                assert_eq!(err.code(), tonic::Code::InvalidArgument);
+                assert!(err.message().contains("expected 2 columns"));
             }
         }
         info!("data loaded");
