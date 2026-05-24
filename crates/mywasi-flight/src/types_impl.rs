@@ -40,7 +40,7 @@ where
     T: FlightView,
 {
     fn create_client(&mut self) -> FlightResult<Resource<HostFlightClient>> {
-        let ctx = self.ctx().clone();
+        let client_ctx = self.ctx().clone();
         {
             let mut counts = LAZY_CLIENT_INSTANCE_COUNTS.lock().map_err(|e| {
                 ErrorCode::InternalError(Some(format!(
@@ -48,7 +48,7 @@ where
                     e
                 )))
             })?;
-            *counts.entry(ctx).or_insert(0) += 1;
+            *counts.entry(client_ctx).or_insert(0) += 1;
         }
         let client = HostFlightClient {
             state: FlightClientState::Default,
@@ -674,7 +674,7 @@ where
                 None => true,
             }
         } else {
-            false
+            true
         };
 
         if remove_shared_client {
