@@ -26,9 +26,10 @@ use arrow_flight::{
 use isekai_utils::module::GetTicket;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tracing::{debug, error, info};
 use tracing_subscriber::{fmt, EnvFilter};
@@ -38,6 +39,8 @@ const DEFAULT_EXPOSED_HEADERS: [&str; 3] =
     ["grpc-status", "grpc-message", "grpc-status-details-bin"];
 const DEFAULT_ALLOW_HEADERS: [&str; 4] =
     ["x-grpc-web", "content-type", "x-user-agent", "grpc-timeout"];
+const HANDSHAKE_TOKEN_TTL: Duration = Duration::from_secs(10 * 60);
+const MAX_VALID_TOKENS: usize = 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -55,11 +58,42 @@ mod csv;
 mod edinet;
 mod storage;
 
+#[derive(Default)]
+struct ValidTokenStore {
+    tokens: HashMap<String, Instant>,
+}
+
+impl ValidTokenStore {
+    fn insert(&mut self, token: String, now: Instant) {
+        self.prune(now);
+        self.tokens.insert(token, now + HANDSHAKE_TOKEN_TTL);
+        if self.tokens.len() > MAX_VALID_TOKENS {
+            if let Some(expired_token) = self
+                .tokens
+                .iter()
+                .min_by_key(|(_, expires_at)| *expires_at)
+                .map(|(token, _)| token.clone())
+            {
+                self.tokens.remove(&expired_token);
+            }
+        }
+    }
+
+    fn is_valid(&mut self, token: &str, now: Instant) -> bool {
+        self.prune(now);
+        self.tokens.contains_key(token)
+    }
+
+    fn prune(&mut self, now: Instant) {
+        self.tokens.retain(|_, expires_at| *expires_at > now);
+    }
+}
+
 #[derive(Clone)]
 pub struct FlightServiceImpl {
     cmd_opts: CmdOptions,
     jwks: Jwks,
-    valid_tokens: Arc<Mutex<Vec<String>>>,
+    valid_tokens: Arc<Mutex<ValidTokenStore>>,
     server_ld: Option<[u8; 48]>,
 }
 
@@ -143,7 +177,10 @@ impl FlightService for FlightServiceImpl {
                     let token = token.into_iter()
                         .map(|x| format!("{:02x}", x))
                         .collect::<String>();
-                    valid_tokens.lock().unwrap().push(token.clone());
+                    valid_tokens
+                        .lock()
+                        .unwrap()
+                        .insert(token.clone(), Instant::now());
                     HandshakeResponse {
                         protocol_version: 1,
                         payload: bytes::Bytes::from(token),
@@ -205,7 +242,12 @@ impl FlightService for FlightServiceImpl {
                     Err(Status::unauthenticated("too short"))
                 }
             })?;
-        if !self.valid_tokens.lock().unwrap().contains(&token) {
+        if !self
+            .valid_tokens
+            .lock()
+            .unwrap()
+            .is_valid(&token, Instant::now())
+        {
             error!("Invalid token");
             return Err(Status::unauthenticated("Invalid token"));
         }
@@ -343,7 +385,12 @@ impl FlightService for FlightServiceImpl {
                     Err(Status::unauthenticated("too short"))
                 }
             })?;
-        if !self.valid_tokens.lock().unwrap().contains(&token) {
+        if !self
+            .valid_tokens
+            .lock()
+            .unwrap()
+            .is_valid(&token, Instant::now())
+        {
             return Err(Status::unauthenticated("Invalid token"));
         }
 
@@ -401,48 +448,47 @@ impl FlightService for FlightServiceImpl {
             )));
         }
 
-        let mut target = None;
         let mut policy = None;
+        let mut schema = None;
+        let mut batches = Vec::new();
         let mut stream = FlightDataDecoder::new(request.into_inner().map_err(FlightError::from));
         while let Some(data) = stream.next().await {
-            match data.map(|x| {
-                if !x.inner.app_metadata.is_empty() {
-                    policy = Some(String::from_utf8_lossy(&x.inner.app_metadata).to_string());
-                }
-                x.payload
-            }) {
-                Err(e) => {
-                    error!("error: {:?}", e);
-                    continue;
-                }
-                Ok(DecodedPayload::None) => {
+            let data = data.map_err(|e| {
+                error!("Failed to decode FlightData: {:?}", e);
+                Status::invalid_argument(format!("Failed to decode FlightData: {:?}", e))
+            })?;
+            if !data.inner.app_metadata.is_empty() {
+                policy = Some(String::from_utf8_lossy(&data.inner.app_metadata).to_string());
+            }
+            match data.payload {
+                DecodedPayload::None => {
                     error!("Received empty payload");
-                    continue;
+                    return Err(Status::invalid_argument("Received empty payload"));
                 }
-                Ok(DecodedPayload::Schema(schema)) => {
-                    target = Some(
-                        storage::create_storage(&self.cmd_opts, &subject, schema, policy.take())
-                            .map_err(|e| {
-                                Status::internal(format!("Failed to create table: {:?}", e))
-                            })?,
-                    );
+                DecodedPayload::Schema(decoded_schema) => {
+                    if schema.is_some() {
+                        return Err(Status::invalid_argument(
+                            "Multiple schemas are not supported",
+                        ));
+                    }
+                    schema = Some(decoded_schema);
                 }
-                Ok(DecodedPayload::RecordBatch(batch)) => {
-                    let target_name = target.as_ref().ok_or_else(|| {
-                        Status::invalid_argument("Schema must be sent before RecordBatch")
-                    })?;
-                    storage::insert_data(&self.cmd_opts, &subject, target_name, batch).map_err(
-                        |e| Status::internal(format!("Failed to update table: {:?}", e)),
-                    )?;
+                DecodedPayload::RecordBatch(batch) => {
+                    if schema.is_none() {
+                        return Err(Status::invalid_argument(
+                            "Schema must be sent before RecordBatch",
+                        ));
+                    }
+                    batches.push(batch);
                 }
             }
         }
 
-        let target_name = target
-            .as_ref()
-            .ok_or_else(|| Status::invalid_argument("No schema was provided"))?;
+        let schema = schema.ok_or_else(|| Status::invalid_argument("No schema was provided"))?;
+        let target_name = storage::store_data(&self.cmd_opts, &subject, schema, policy, batches)
+            .map_err(|e| Status::internal(format!("Failed to store data: {:?}", e)))?;
         let results = vec![Ok(PutResult {
-            app_metadata: bytes::Bytes::from(target_name.clone()),
+            app_metadata: bytes::Bytes::from(target_name),
         })];
         let result_stream = futures::stream::iter(results.into_iter());
         Ok(Response::new(Box::pin(result_stream)))
@@ -563,7 +609,7 @@ async fn main() -> anyhow::Result<()> {
     let service = FlightServiceImpl {
         cmd_opts: cmd_opts.clone(),
         jwks,
-        valid_tokens: Arc::new(Mutex::new(Vec::new())),
+        valid_tokens: Arc::new(Mutex::new(ValidTokenStore::default())),
         server_ld,
     };
 
@@ -615,4 +661,40 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ValidTokenStore, HANDSHAKE_TOKEN_TTL, MAX_VALID_TOKENS};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn token_store_prunes_expired_tokens() {
+        let mut store = ValidTokenStore::default();
+        let now = Instant::now();
+
+        store.insert("valid".to_string(), now);
+        assert!(store.is_valid("valid", now + Duration::from_secs(1)));
+        assert!(!store.is_valid("valid", now + HANDSHAKE_TOKEN_TTL + Duration::from_secs(1),));
+    }
+
+    #[test]
+    fn token_store_keeps_size_bounded() {
+        let mut store = ValidTokenStore::default();
+        let now = Instant::now();
+
+        for i in 0..=MAX_VALID_TOKENS {
+            store.insert(format!("token-{i}"), now + Duration::from_millis(i as u64));
+        }
+
+        assert_eq!(store.tokens.len(), MAX_VALID_TOKENS);
+        assert!(!store.is_valid(
+            "token-0",
+            now + Duration::from_millis(MAX_VALID_TOKENS as u64),
+        ));
+        assert!(store.is_valid(
+            &format!("token-{MAX_VALID_TOKENS}"),
+            now + Duration::from_millis(MAX_VALID_TOKENS as u64),
+        ));
+    }
 }
