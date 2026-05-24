@@ -3,12 +3,15 @@
 
 use super::*;
 
-#[cfg(target_os = "linux")]
-use std::{fs::OpenOptions, io::Read};
 use std::{
     fs::{self, File},
     io::Write,
     path::PathBuf,
+};
+#[cfg(target_os = "linux")]
+use std::{
+    fs::OpenOptions,
+    io::Read,
 };
 
 use anyhow::{anyhow, Result};

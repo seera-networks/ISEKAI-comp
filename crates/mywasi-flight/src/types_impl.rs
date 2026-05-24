@@ -80,7 +80,7 @@ where
             client.state = FlightClientState::Connecting(rx);
             return Ok(());
         }
-
+        
         let server_url = ctx.server_url.clone();
         let use_tls = ctx.use_tls;
         let client_cert_pem = ctx.client_cert_pem.clone();

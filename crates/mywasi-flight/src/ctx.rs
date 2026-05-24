@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2025 SEERA Networks Corporation <info@seera-networks.com>
 // SPDX-License-Identifier: MIT
 
-use snpguest::report::AttestationConfig;
 use wasmtime::component::ResourceTable;
+use snpguest::report::AttestationConfig;
 
 /// Builder-style structure used to create a [`FlightCtx`].
 ///
