@@ -246,7 +246,9 @@ impl FlightService for FlightServiceImpl {
         } else if self.cmd_opts.allow_test_subject_fallback {
             "test".to_string()
         } else {
-            return Err(Status::unauthenticated("No valid authorization JWT"));
+            return Err(Status::unauthenticated(
+                "Authorization JWT is missing or invalid",
+            ));
         };
 
         if !auth::authenticate_subject(&self.cmd_opts, &subject) {
@@ -384,7 +386,9 @@ impl FlightService for FlightServiceImpl {
         } else if self.cmd_opts.allow_test_subject_fallback {
             "test".to_string()
         } else {
-            return Err(Status::unauthenticated("No valid authorization JWT"));
+            return Err(Status::unauthenticated(
+                "Authorization JWT is missing or invalid",
+            ));
         };
 
         if !auth::authenticate_subject(&self.cmd_opts, &subject) {
