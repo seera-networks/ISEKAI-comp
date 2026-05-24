@@ -31,6 +31,8 @@ use wasmtime_wasi::{async_trait, runtime::with_ambient_tokio_runtime};
 
 static LAZY_SHARED_CLIENTS: LazyLock<Arc<Mutex<HashMap<FlightCtx, FlightServiceClient<Channel>>>>> =
     LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
+static LAZY_CLIENT_INSTANCE_COUNTS: LazyLock<Arc<Mutex<HashMap<FlightCtx, usize>>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 #[async_trait]
 impl<T> crate::bindings::flight::client::Host for FlightImpl<T>
@@ -38,6 +40,16 @@ where
     T: FlightView,
 {
     fn create_client(&mut self) -> FlightResult<Resource<HostFlightClient>> {
+        let ctx = self.ctx().clone();
+        {
+            let mut counts = LAZY_CLIENT_INSTANCE_COUNTS.lock().map_err(|e| {
+                ErrorCode::InternalError(Some(format!(
+                    "failed to lock client instance counts: {:?}",
+                    e
+                )))
+            })?;
+            *counts.entry(ctx).or_insert(0) += 1;
+        }
         let client = HostFlightClient {
             state: FlightClientState::Default,
             token: None,
@@ -646,9 +658,29 @@ where
     }
 
     fn drop(&mut self, id: Resource<HostFlightClient>) -> wasmtime::Result<()> {
+        let ctx = self.ctx().clone();
         let _ = self.table().delete(id)?;
-        if let Ok(mut clients) = LAZY_SHARED_CLIENTS.lock() {
-            clients.remove(self.ctx());
+
+        let remove_shared_client = if let Ok(mut counts) = LAZY_CLIENT_INSTANCE_COUNTS.lock() {
+            match counts.get_mut(&ctx) {
+                Some(count) if *count > 1 => {
+                    *count -= 1;
+                    false
+                }
+                Some(_) => {
+                    counts.remove(&ctx);
+                    true
+                }
+                None => true,
+            }
+        } else {
+            false
+        };
+
+        if remove_shared_client {
+            if let Ok(mut clients) = LAZY_SHARED_CLIENTS.lock() {
+                clients.remove(&ctx);
+            }
         }
         Ok(())
     }
