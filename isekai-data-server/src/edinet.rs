@@ -54,6 +54,10 @@ fn parquet_filename(base_path: &str, item: &str, context: &str, year: &str) -> R
     Ok(format!("{base_path}/{item}-{context}-{year}.parquet"))
 }
 
+const EDINET_ID_COL: usize = 0;
+const CLOSING_DATE_COL: usize = 1;
+const VALUE_COL: usize = 2;
+
 pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBatch>> {
     // let mut state = STATE.lock().unwrap();
     let parts: Vec<&str> = column_name.split('/').collect();
@@ -105,9 +109,9 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
             .map_err(|e| Status::internal(format!("prepare: {:?}", e)))?;
         let entry_iter = stmt
             .query_map(params![item.clone(), context.clone()], |row| {
-                let edinet_id: String = row.get(0)?;
-                let closing_date: Option<String> = row.get(1)?;
-                let value: Option<String> = row.get(2)?;
+                let edinet_id: String = row.get(EDINET_ID_COL)?;
+                let closing_date: Option<String> = row.get(CLOSING_DATE_COL)?;
+                let value: Option<String> = row.get(VALUE_COL)?;
                 Ok((edinet_id, closing_date, value))
             })
             .map_err(|e| Status::internal(format!("query_map: {:?}", e)))?;
