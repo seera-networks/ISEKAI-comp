@@ -4,12 +4,12 @@
 use arrow::array::{Float32Array, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
+use isekai_utils::policy::PolicyFile;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock, Mutex};
 use tonic::{Result, Status};
 use tracing::info;
-use isekai_utils::policy::PolicyFile;
 
 use crate::CmdOptions;
 
@@ -28,10 +28,10 @@ struct DataStore {
 
 impl DataStore {
     fn new() -> Self {
-        return Self {
+        Self {
             columns: HashMap::new(),
             loaded: false,
-        };
+        }
     }
 }
 
@@ -78,12 +78,9 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
         }
 
         for (col_name, value) in data {
-            let is_float_column = value.iter().any({
-                |v| match v.as_ref() {
-                    Some(Value::Float32(_)) => true,
-                    _ => false,
-                }
-            });
+            let is_float_column = value
+                .iter()
+                .any(|v| matches!(v.as_ref(), Some(Value::Float32(_))));
             if is_float_column {
                 let field = Field::new(col_name.clone(), DataType::Float32, true);
                 let new_value: Vec<Option<f32>> = value
@@ -148,13 +145,11 @@ pub fn get_policy(
         &cmd_opts.policy_db,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     )?;
-    let sql = format!(
-        r#"
+    let sql = r#"
         SELECT json FROM policy
             WHERE subject = ?;
-        "#
-    );
-    let mut stmt = conn.prepare(&sql)?;
+        "#;
+    let mut stmt = conn.prepare(sql)?;
     let entry_iter = stmt.query_map(rusqlite::params![subject], |row| {
         let val: String = row.get(0)?;
         Ok(val)

@@ -92,20 +92,18 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
         )
         .map_err(|e| Status::internal(format!("open_with_flags: {:?}", e)))?;
 
-        let sql = format!(
-            r#"
+        let sql = r#"
         SELECT ids.edinet_id, entries.closing_date, entries.value FROM ids
             LEFT JOIN entries
                 ON ids.edinet_id = entries.edinet_id AND
                     entries.item = ? AND
                     entries.context = ?
-        "#
-        );
+        "#;
 
         let mut datas: VecDeque<(String, HashMap<String, Option<Value>>)> = VecDeque::new();
 
         let mut stmt = conn
-            .prepare(&sql)
+            .prepare(sql)
             .map_err(|e| Status::internal(format!("prepare: {:?}", e)))?;
         let entry_iter = stmt
             .query_map(params![item.clone(), context.clone()], |row| {
@@ -162,13 +160,9 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
             }
         }
 
-        let is_float_column = datas.iter().any({
-            |v| {
-                v.1.values().any(|v2| match v2.as_ref() {
-                    Some(Value::Float32(_)) => true,
-                    _ => false,
-                })
-            }
+        let is_float_column = datas.iter().any(|v| {
+            v.1.values()
+                .any(|v2| matches!(v2.as_ref(), Some(Value::Float32(_))))
         });
 
         for year in years {
@@ -178,10 +172,7 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
                 let values: Vec<Option<f32>> = datas
                     .iter()
                     .map(|(_, values)| match values.get(&year) {
-                        Some(values) => match values {
-                            Some(Value::Float32(v)) => Some(*v),
-                            _ => None,
-                        },
+                        Some(Some(Value::Float32(v))) => Some(*v),
                         _ => None,
                     })
                     .collect();
@@ -195,10 +186,7 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
                 let values: Vec<Option<String>> = datas
                     .iter()
                     .map(|(_, values)| match values.get(&year) {
-                        Some(values) => match values {
-                            Some(Value::String(v)) => Some(v.clone()),
-                            _ => None,
-                        },
+                        Some(Some(Value::String(v))) => Some(v.clone()),
                         _ => None,
                     })
                     .collect();
@@ -213,6 +201,7 @@ pub fn get_data(cmd_opts: &CmdOptions, column_name: &str) -> Result<Vec<RecordBa
             let file = OpenOptions::new()
                 .write(true)
                 .create(true)
+                .truncate(true)
                 .open(filename)
                 .map_err(|e| Status::internal(format!("failed to open file: {:?}", e)))?;
 
@@ -269,13 +258,11 @@ pub fn get_policy(
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     )?;
 
-    let sql = format!(
-        r#"
+    let sql = r#"
         SELECT json FROM policy
             WHERE subject = ?;
-        "#
-    );
-    let mut stmt = conn.prepare(&sql)?;
+        "#;
+    let mut stmt = conn.prepare(sql)?;
     let entry_iter = stmt.query_map(rusqlite::params![subject], |row| {
         let val: String = row.get(0)?;
         Ok(val)
@@ -284,22 +271,20 @@ pub fn get_policy(
         return Ok(policy);
     }
 
-    let sql = format!(
-        r#"
+    let sql = r#"
         SELECT json FROM policy_by_item
             WHERE item = ?;
-        "#
-    );
-    let mut stmt = conn.prepare(&sql)?;
+        "#;
+    let mut stmt = conn.prepare(sql)?;
     let entry_iter = stmt.query_map(rusqlite::params![item], |row| {
         let val: String = row.get(0)?;
         Ok(val)
     })?;
     if let Some(policy) = entry_iter.last().transpose()? {
         let mut policy = PolicyFile::from_json(&policy);
-        policy.rules.get_mut(&item).map(|rule| {
+        if let Some(rule) = policy.rules.get_mut(&item) {
             rule.column_name = column_name.to_owned();
-        });
+        }
         Ok(serde_json::to_string(&policy).unwrap())
     } else {
         Ok(default_policy(column_name))

@@ -564,7 +564,7 @@ async fn main() -> anyhow::Result<()> {
         cmd_opts: cmd_opts.clone(),
         jwks,
         valid_tokens: Arc::new(Mutex::new(Vec::new())),
-        server_ld: server_ld,
+        server_ld,
     };
 
     let svc = FlightServiceServer::new(service);
