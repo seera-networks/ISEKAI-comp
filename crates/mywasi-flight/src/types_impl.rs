@@ -72,7 +72,16 @@ where
             }
         }
         let (tx, rx) = oneshot::channel();
-        if let Some(flight_client) = shared_clients.lock().unwrap().get(&ctx) {
+        let cached_client = {
+            let clients = shared_clients.lock().map_err(|e| {
+                ErrorCode::InternalError(Some(format!(
+                    "failed to lock shared client cache: {:?}",
+                    e
+                )))
+            })?;
+            clients.get(&ctx).cloned()
+        };
+        if let Some(flight_client) = cached_client {
             with_ambient_tokio_runtime(|| {
                 let flight_client = flight_client.clone();
                 let _ = tx.send(Ok(flight_client));
@@ -88,7 +97,16 @@ where
         let ca_cert_pem = ctx.ca_cert_pem.clone();
         with_ambient_tokio_runtime(|| {
             tokio::spawn(async move {
-                let endpoint = Channel::builder(server_url.parse().unwrap());
+                let uri = match server_url.parse() {
+                    Ok(uri) => uri,
+                    Err(e) => {
+                        let _ = tx.send(Err(
+                            tonic::Status::internal(format!("invalid server url: {:?}", e)).into(),
+                        ));
+                        return;
+                    }
+                };
+                let endpoint = Channel::builder(uri);
                 let endpoint = if use_tls {
                     let tls_config = if let Some(ca_cert_pem) = ca_cert_pem {
                         ClientTlsConfig::new().ca_certificate(Certificate::from_pem(&ca_cert_pem))
@@ -122,11 +140,19 @@ where
                 match endpoint.connect().await {
                     Ok(channel) => {
                         let flight_client = FlightServiceClient::new(channel);
-                        shared_clients
-                            .lock()
-                            .unwrap()
-                            .insert(ctx, flight_client.clone());
-                        let _ = tx.send(Ok(flight_client));
+                        match shared_clients.lock() {
+                            Ok(mut clients) => {
+                                clients.insert(ctx, flight_client.clone());
+                                let _ = tx.send(Ok(flight_client));
+                            }
+                            Err(e) => {
+                                let _ = tx.send(Err(tonic::Status::internal(format!(
+                                    "failed to lock shared client cache: {:?}",
+                                    e
+                                ))
+                                .into()));
+                            }
+                        }
                     }
                     Err(e) => {
                         let _ = tx.send(Err(e.into()));
@@ -228,6 +254,12 @@ where
                     let mut att_req = snpguest::report::ReportDirectArgs::default();
                     att_req.proc_type = att_config.proc_type;
                     att_req.endorsement = att_config.endorsement;
+                    if res.payload.len() < 64 {
+                        return Err(tonic::Status::internal(format!(
+                            "handshake payload too short: {} bytes",
+                            res.payload.len()
+                        )));
+                    }
                     att_req
                         .request_data
                         .copy_from_slice(&res.payload.to_byte_slice()[0..64]);
@@ -235,7 +267,12 @@ where
                         tonic::Status::internal(format!("failed to get report: {:?}", e))
                     })?;
 
-                    let ext_att_bin = bincode::serialize(&att).unwrap();
+                    let ext_att_bin = bincode::serialize(&att).map_err(|e| {
+                        tonic::Status::internal(format!(
+                            "failed to serialize attestation report: {:?}",
+                            e
+                        ))
+                    })?;
                     let req = arrow_flight::HandshakeRequest {
                         protocol_version: 1,
                         payload: bytes::Bytes::copy_from_slice(&ext_att_bin),
@@ -610,6 +647,9 @@ where
 
     fn drop(&mut self, id: Resource<HostFlightClient>) -> wasmtime::Result<()> {
         let _ = self.table().delete(id)?;
+        if let Ok(mut clients) = LAZY_SHARED_CLIENTS.lock() {
+            clients.remove(self.ctx());
+        }
         Ok(())
     }
 }
