@@ -572,7 +572,7 @@ async fn main() -> anyhow::Result<()> {
     let server = if cmd_opts.no_tls {
         Server::builder()
     } else {
-        println!("TLS enabled");
+        info!("TLS enabled");
         // Load server's identity (certificate and private key)
         let cert = std::fs::read(&cmd_opts.cert)?;
         let key = std::fs::read(&cmd_opts.key)?;
