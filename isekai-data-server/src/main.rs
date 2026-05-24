@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2025 SEERA Networks Corporation <info@seera-networks.com>
 // SPDX-License-Identifier: MIT
 
-use base64::Engine;
 use anyhow::anyhow;
+use base64::Engine;
 use futures::stream::BoxStream;
 use futures::{StreamExt, TryStreamExt};
 use http::header::HeaderName;
@@ -31,7 +31,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tracing::{debug, error, info};
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing_subscriber::{fmt, EnvFilter};
 
 const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 const DEFAULT_EXPOSED_HEADERS: [&str; 3] =
@@ -206,8 +206,8 @@ impl FlightService for FlightServiceImpl {
                 }
             })?;
         if !self.valid_tokens.lock().unwrap().contains(&token) {
-            error!("Invalid token: {}", token);
-            return Err(Status::unauthenticated(format!("Invalid token: {}", token)));
+            error!("Invalid token");
+            return Err(Status::unauthenticated("Invalid token"));
         }
 
         let jwt = request
@@ -344,7 +344,7 @@ impl FlightService for FlightServiceImpl {
                 }
             })?;
         if !self.valid_tokens.lock().unwrap().contains(&token) {
-            return Err(Status::unauthenticated(format!("Invalid token: {}", token)));
+            return Err(Status::unauthenticated("Invalid token"));
         }
 
         let jwt = request
@@ -428,21 +428,21 @@ impl FlightService for FlightServiceImpl {
                     );
                 }
                 Ok(DecodedPayload::RecordBatch(batch)) => {
-                    storage::insert_data(
-                        &self.cmd_opts,
-                        &subject,
-                        target.as_ref().expect("target not created yet"),
-                        batch,
-                    )
-                    .map_err(|e| Status::internal(format!("Failed to update table: {:?}", e)))?;
+                    let target_name = target.as_ref().ok_or_else(|| {
+                        Status::invalid_argument("Schema must be sent before RecordBatch")
+                    })?;
+                    storage::insert_data(&self.cmd_opts, &subject, target_name, batch).map_err(
+                        |e| Status::internal(format!("Failed to update table: {:?}", e)),
+                    )?;
                 }
             }
         }
 
+        let target_name = target
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("No schema was provided"))?;
         let results = vec![Ok(PutResult {
-            app_metadata: bytes::Bytes::from(
-                target.as_ref().expect("target not created yet").clone(),
-            ),
+            app_metadata: bytes::Bytes::from(target_name.clone()),
         })];
         let result_stream = futures::stream::iter(results.into_iter());
         Ok(Response::new(Box::pin(result_stream)))
@@ -549,9 +549,12 @@ async fn main() -> anyhow::Result<()> {
 
     let server_ld = if let Some(server_ld) = &cmd_opts.server_ld {
         let base64_engine = base64::engine::general_purpose::STANDARD;
-        let res =base64_engine.decode(server_ld.as_bytes())?;
+        let res = base64_engine.decode(server_ld.as_bytes())?;
         if res.len() != 48 {
-            return Err(anyhow!("server_ld must be 48 bytes when decoded, but got {}", res.len()));
+            return Err(anyhow!(
+                "server_ld must be 48 bytes when decoded, but got {}",
+                res.len()
+            ));
         }
         Some(res[0..48].try_into().unwrap())
     } else {
