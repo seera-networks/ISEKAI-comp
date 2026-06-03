@@ -43,6 +43,22 @@ ISEKAI Compute introduces a new model:
 ## 🏗 Architecture
 ![ISEKAI Compute Architecture](./docs/ISEKAI_arch.png)
 
+
+### 🧩 Module Model
+
+ISEKAI Compute executes user-defined modules written in WebAssembly (WASM).
+
+This provides:
+- sandboxed execution
+- language-agnostic extensibility
+- safe deployment inside TEE
+
+Modules include:
+- Data Access Modules (fetch data from data servers)
+- Compute Modules (e.g. pseudonymization, aggregation)
+
+---
+
 ### Flow
 
 1. User submits computation (DAG)
