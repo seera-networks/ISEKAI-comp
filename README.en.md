@@ -141,7 +141,6 @@ Each dataset is associated with a policy defining:
 ---
 
 ## 📄 Background
-
 In domains such as healthcare and finance, protecting personal data while enabling its utilization is a major challenge.  
 The concept of **data control rights**—where data owners control how their data is used—is gaining attention.
 
@@ -152,6 +151,14 @@ ISEKAI Compute realizes this concept by ensuring:
 - Raw data is never exposed
 
 In the medical domain, ISEKAI enables transformation of hospital-held medical records into pseudonymized datasets usable for research and pharmaceutical development, without exposing the original data.
+
+---
+
+## Overview
+
+ISEKAI Compute builds on prior research on policy-controlled data processing, where data providers retain control over how their data is used. The underlying architecture combines WebAssembly-based execution with Trusted Execution Environments (TEE), enabling flexible yet constrained data analysis workflows. In this model, data is never directly exposed; instead, computation is dynamically applied under explicit policies defined by the data provider, allowing secure, cross-organizational data analysis without requiring data sharing or centralization.
+
+For more details, see the full paper: https://ieeexplore.ieee.org/document/11126844
 
 ---
 
